@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GEMINI_CONFIG } from "./config";
 
-const API_KEY = "AIzaSyA3wlaGOPczH0FROCH_wcsiXr5R8gmHPTg";
-const genAI = new GoogleGenerativeAI(API_KEY);
+const genAI = new GoogleGenerativeAI(GEMINI_CONFIG.apiKey);
 
 export interface QuizQuestion {
   id: string;

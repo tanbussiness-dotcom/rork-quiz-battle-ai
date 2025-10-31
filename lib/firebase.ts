@@ -5,19 +5,9 @@ import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { Platform } from "react-native";
+import { FIREBASE_CONFIG } from "./config";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDyNbcAc2J8OdLdqmK0O7Mx5Z68C0CpU4w",
-  authDomain: "quiz-battle-ai.firebaseapp.com",
-  databaseURL: "https://quiz-battle-ai-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "quiz-battle-ai",
-  storageBucket: "quiz-battle-ai.firebasestorage.app",
-  messagingSenderId: "244936603537",
-  appId: "1:244936603537:web:011dfd33acf3db03f20c30",
-  measurementId: "G-LF386PZ9BJ"
-};
-
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const app = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApp();
 
 const auth = getAuth(app);
 
