@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -13,8 +13,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { X, Check, Clock } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import GlowingCard from "@/components/GlowingCard";
+import AIMentor from "@/components/AIMentor";
 import GradientButton from "@/components/GradientButton";
 import { generateQuestions, QuizQuestion } from "@/lib/gemini";
+import { saveMinimalQuestion } from "@/services/question.service";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { QUIZ_TOPICS } from "@/constants/topics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -38,6 +40,7 @@ export default function QuizPlayScreen() {
   const [timeLeft, setTimeLeft] = useState<number>(TIME_PER_QUESTION);
   const [answered, setAnswered] = useState<boolean>(false);
   const [fadeAnim] = useState(new Animated.Value(1));
+  const [mentorQuestionId, setMentorQuestionId] = useState<string | null>(null);
 
   const topicData = QUIZ_TOPICS.find((t) => t.id === topic);
 
@@ -129,6 +132,32 @@ export default function QuizPlayScreen() {
       }
     });
   };
+
+  const ensureMentorQuestionSaved = useCallback(async () => {
+    try {
+      const q = questions[currentQuestionIndex];
+      if (!q) return;
+      if (mentorQuestionId) return;
+      const id = await saveMinimalQuestion({
+        content: q.question,
+        correctAnswer: Array.isArray(q.correctAnswer) ? String((q.correctAnswer as string[])[0]) : String(q.correctAnswer as string),
+        language: "English",
+      });
+      setMentorQuestionId(id);
+    } catch (e) {
+      console.log("ensureMentorQuestionSaved error", e);
+    }
+  }, [questions, currentQuestionIndex, mentorQuestionId]);
+
+  useEffect(() => {
+    if (answered && selectedAnswer && questions[currentQuestionIndex]) {
+      const q = questions[currentQuestionIndex];
+      const isCorrect = selectedAnswer === q.correctAnswer;
+      if (!isCorrect) {
+        void ensureMentorQuestionSaved();
+      }
+    }
+  }, [answered, selectedAnswer, currentQuestionIndex, questions, ensureMentorQuestionSaved]);
 
   const finishQuiz = async () => {
     const correctAnswers = questions.filter(
@@ -263,11 +292,19 @@ export default function QuizPlayScreen() {
                   </Text>
                 </GlowingCard>
               ) : (
-                <GlowingCard style={[styles.feedbackCard, styles.feedbackError]}>
+                <GlowingCard style={[styles.feedbackCard, styles.feedbackError]} testID="feedback-incorrect">
                   <Text style={styles.feedbackTitle}>❌ Incorrect</Text>
                   <Text style={styles.feedbackText}>
                     {currentQuestion.explanation}
                   </Text>
+                  {mentorQuestionId && selectedAnswer && (
+                    <View style={{ marginTop: 12 }}>
+                      <AIMentor
+                        questionId={mentorQuestionId}
+                        playerAnswer={selectedAnswer}
+                      />
+                    </View>
+                  )}
                 </GlowingCard>
               )}
 

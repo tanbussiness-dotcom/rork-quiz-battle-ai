@@ -181,3 +181,28 @@ export async function getOfflineQuestions(): Promise<Question[]> {
     return [] as Question[];
   }
 }
+
+export async function saveMinimalQuestion(payload: {
+  content: string;
+  correctAnswer: string;
+  language: string;
+}): Promise<string> {
+  const docRef = await addDoc(collection(db, QUESTIONS_COLLECTION), {
+    content: payload.content,
+    correctAnswer: payload.correctAnswer,
+    language: payload.language,
+    createdAt: Date.now(),
+    source: "ai",
+    createdByAI: true,
+  });
+  return docRef.id;
+}
+
+export async function explainAnswerViaBackend(params: {
+  questionId: string;
+  playerAnswer: string;
+  language?: string;
+}): Promise<string> {
+  const res = await trpcClient.questions.explain.mutate(params);
+  return (res as any).explanation as string;
+}
