@@ -1,75 +1,100 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
+
+    function isParticipant() {
+      return isAuthenticated() && (
+        // Existing doc (read/update)
+        resource.data.hostId == request.auth.uid ||
+        resource.data.opponentId == request.auth.uid ||
+        // New doc (create) — allow host, and allow opponent to join when field is being set
+        request.resource.data.hostId == request.auth.uid ||
+        request.resource.data.opponentId == request.auth.uid
+      );
+    }
+
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'username', 'email', 'language']) &&
              data.uid is string &&
              data.username is string &&
              data.email is string &&
-             data.language in ['en', 'vi', 'zh', 'ja'];
+             data.language in ['en', 'vi', 'zh', 'ja'] &&
+             // Ensure users can only write their own UID
+             data.uid == request.auth.uid;
     }
-    
+
+    // Users: each user can only read/write their own document and subcollections
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if isOwner(userId);
       allow create: if isOwner(userId) && isValidUser(request.resource.data);
       allow update: if isOwner(userId);
       allow delete: if isOwner(userId);
+
+      // Lock down all nested data to the owner as well
+      match /{sub=**} {
+        allow read, create, update, delete: if isOwner(userId);
+      }
     }
-    
+
+    // Questions: readable to authenticated users, write only via backend
     match /questions/{questionId} {
       allow read: if isAuthenticated();
       allow write: if false;
     }
-    
+
+    // Matches: only participants may read or write; no deletes from clients
     match /matches/{matchId} {
-      allow read: if isAuthenticated() && 
-                     (resource.data.hostId == request.auth.uid || 
-                      resource.data.opponentId == request.auth.uid);
+      allow read: if isParticipant();
       allow create: if isAuthenticated() && request.resource.data.hostId == request.auth.uid;
-      allow update: if isAuthenticated() && 
-                       (resource.data.hostId == request.auth.uid || 
-                        resource.data.opponentId == request.auth.uid);
+      // Allow updates by any participant (host/opponent) — covers join and gameplay sync
+      allow update: if isParticipant();
       allow delete: if false;
+
+      match /{sub=**} {
+        allow read, write: if isParticipant();
+      }
     }
-    
-    match /leaderboards/{entryId} {
+
+    // Leaderboards, missions, badges are server-managed
+    match /leaderboards/{document=**} {
       allow read: if isAuthenticated();
       allow write: if false;
     }
-    
-    match /missions/{missionId} {
+
+    match /missions/{document=**} {
       allow read: if isAuthenticated();
       allow write: if false;
     }
-    
+
+    match /badges/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    // User mission progress and history — only the owner
     match /userMissions/{userMissionId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isOwner(resource.data.userId);
     }
-    
-    match /badges/{badgeId} {
-      allow read: if isAuthenticated();
-      allow write: if false;
-    }
-    
+
     match /questionHistory/{historyId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if false;
       allow delete: if false;
     }
-    
+
+    // Default deny — prevents public access to any unspecified paths
     match /{document=**} {
       allow read, write: if false;
     }
