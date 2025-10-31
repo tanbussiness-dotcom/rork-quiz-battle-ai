@@ -16,13 +16,14 @@ import GlowingCard from "@/components/GlowingCard";
 import AIMentor from "@/components/AIMentor";
 import GradientButton from "@/components/GradientButton";
 import { generateQuestions, QuizQuestion } from "@/lib/gemini";
-import { saveMinimalQuestion } from "@/services/question.service";
+import { saveMinimalQuestion, getOfflineQuestions } from "@/services/question.service";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { QUIZ_TOPICS } from "@/constants/topics";
 import { useI18n } from "@/contexts/I18nContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 
 const QUESTIONS_PER_QUIZ = 10;
 const TIME_PER_QUESTION = 30;
@@ -36,6 +37,7 @@ export default function QuizPlayScreen() {
 
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
+  const online = useOnlineStatus();
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [score, setScore] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -68,6 +70,25 @@ export default function QuizPlayScreen() {
     try {
       setLoading(true);
       const languageName = language === "vi" ? "Vietnamese" : "English";
+      if (!online) {
+        const offline = await getOfflineQuestions();
+        if (offline.length === 0) {
+          Alert.alert("Offline", "No cached questions found. Connect to the internet to generate questions.", [{ text: "OK", onPress: () => router.back() }]);
+          return;
+        }
+        const mapped: QuizQuestion[] = offline.slice(0, QUESTIONS_PER_QUIZ).map((q) => ({
+          id: q.id,
+          type: (q.type as QuizQuestion["type"]) || "multiple_choice",
+          question: q.content,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+          explanation: q.explanation,
+          difficulty: q.difficulty as QuizQuestion["difficulty"],
+          topic: q.topic,
+        }));
+        setQuestions(mapped);
+        return;
+      }
       const generatedQuestions = await generateQuestions({
         topic: topicData?.name || "General Knowledge",
         difficulty: "Medium",

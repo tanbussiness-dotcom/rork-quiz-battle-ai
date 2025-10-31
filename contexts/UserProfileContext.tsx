@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "./AuthContext";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { enqueueProgressUpdate, flushProgressQueue } from "@/services/offline.service";
 
 export interface UserProfile {
   uid: string;
@@ -59,6 +61,8 @@ export const [UserProfileProvider, useUserProfile] = createContextHook<UserProfi
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  const online = useOnlineStatus();
 
   useEffect(() => {
     if (!user) {
@@ -120,6 +124,14 @@ export const [UserProfileProvider, useUserProfile] = createContextHook<UserProfi
     loadProfile();
   }, [user]);
 
+  useEffect(() => {
+    if (online) {
+      void flushProgressQueue().then((r) => {
+        console.log("Flushed progress queue", r);
+      });
+    }
+  }, [online]);
+
   const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
     if (!user || !profile) return;
 
@@ -134,6 +146,11 @@ export const [UserProfileProvider, useUserProfile] = createContextHook<UserProfi
     } catch (err: any) {
       console.error("Error updating profile:", err);
       setError(err.message || "Failed to update profile");
+      if (user) {
+        await enqueueProgressUpdate({ type: "updateProfile", uid: user.uid, updates });
+        setProfile((prev) => (prev ? { ...prev, ...updates } : null));
+        return;
+      }
       throw err;
     }
   }, [user, profile]);

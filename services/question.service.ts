@@ -18,7 +18,8 @@ import type { Question, QuestionHistory, GenerateQuestionParams } from "@/models
 
 const QUESTIONS_COLLECTION = "questions";
 const QUESTION_HISTORY_COLLECTION = "question_history";
-const OFFLINE_KEY = "offline_questions_v1";
+const LOCAL_QUESTIONS_KEY = "/local/questions";
+const LEGACY_OFFLINE_KEY = "offline_questions_v1";
 
 export async function generateAndStoreQuestions(
   params: GenerateQuestionParams
@@ -161,11 +162,21 @@ export async function getCompletedQuestionIds(userId: string): Promise<string[]>
 
 export async function cacheOfflineQuestion(q: Question): Promise<void> {
   try {
-    const raw = (await AsyncStorage.getItem(OFFLINE_KEY)) ?? "[]";
+    let raw = (await AsyncStorage.getItem(LOCAL_QUESTIONS_KEY)) ?? null;
+    if (raw === null) {
+      const legacyRaw = await AsyncStorage.getItem(LEGACY_OFFLINE_KEY);
+      if (legacyRaw) {
+        await AsyncStorage.setItem(LOCAL_QUESTIONS_KEY, legacyRaw);
+        await AsyncStorage.removeItem(LEGACY_OFFLINE_KEY);
+        raw = legacyRaw;
+      } else {
+        raw = "[]";
+      }
+    }
     const list = JSON.parse(raw) as Question[];
     const existing = list.filter((it) => it.id !== q.id);
     const next = [q, ...existing].slice(0, APP_CONFIG.offlineQuestionsLimit);
-    await AsyncStorage.setItem(OFFLINE_KEY, JSON.stringify(next));
+    await AsyncStorage.setItem(LOCAL_QUESTIONS_KEY, JSON.stringify(next));
   } catch (e) {
     console.log("cacheOfflineQuestion error", e);
   }
@@ -173,8 +184,17 @@ export async function cacheOfflineQuestion(q: Question): Promise<void> {
 
 export async function getOfflineQuestions(): Promise<Question[]> {
   try {
-    const raw = (await AsyncStorage.getItem(OFFLINE_KEY)) ?? "[]";
-    const list = JSON.parse(raw) as Question[];
+    let raw = (await AsyncStorage.getItem(LOCAL_QUESTIONS_KEY)) ?? null;
+    if (raw === null) {
+      const legacyRaw = await AsyncStorage.getItem(LEGACY_OFFLINE_KEY);
+      if (legacyRaw) {
+        await AsyncStorage.setItem(LOCAL_QUESTIONS_KEY, legacyRaw);
+        await AsyncStorage.removeItem(LEGACY_OFFLINE_KEY);
+        raw = legacyRaw;
+      }
+    }
+    const json = raw ?? "[]";
+    const list = JSON.parse(json) as Question[];
     return list.slice(0, APP_CONFIG.offlineQuestionsLimit);
   } catch (e) {
     console.log("getOfflineQuestions error", e);
