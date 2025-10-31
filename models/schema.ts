@@ -29,6 +29,7 @@ export const REALTIME_DB_PATHS = {
   BATTLE_ROOMS: 'battleRooms',
   ACTIVE_PLAYERS: 'activePlayers',
   MATCHMAKING_QUEUE: 'matchmakingQueue',
+  MATCHES: 'matches',
 } as const;
 
 export const DEFAULT_USER_PROGRESS = {
