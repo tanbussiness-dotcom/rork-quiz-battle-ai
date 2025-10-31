@@ -20,13 +20,15 @@ import GlowingCard from "@/components/GlowingCard";
 import GradientButton from "@/components/GradientButton";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { profile } = useUserProfile();
+  const { profile, updateProfile } = useUserProfile();
   const { logout } = useAuth();
   const insets = useSafeAreaInsets();
+  const { language, setLanguage, t } = useI18n();
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -115,6 +117,35 @@ export default function ProfileScreen() {
               <Text style={styles.statLabel}>Badges</Text>
             </GlowingCard>
           </View>
+
+          <Text style={styles.sectionTitle}>Preferences</Text>
+
+          <GlowingCard style={styles.gameStatsCard} glow={false}>
+            <View style={styles.gameStatRow}>
+              <Text style={styles.gameStatLabel}>Language</Text>
+              <Text style={styles.gameStatValue}>{language.toUpperCase()}</Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={[styles.languageRow]}>
+              {(["en","vi"] as const).map((lang) => (
+                <GradientButton
+                  key={lang}
+                  title={lang === "en" ? "English" : "Tiếng Việt"}
+                  onPress={async () => {
+                    await setLanguage(lang);
+                    try {
+                      await updateProfile({} as any);
+                    } catch (e) {
+                      // no-op
+                    }
+                    Alert.alert("Language", `Switched to ${lang.toUpperCase()}`);
+                  }}
+                  variant={language === lang ? "primary" : "secondary"}
+                  style={{ flex: 1 }}
+                />
+              ))}
+            </View>
+          </GlowingCard>
 
           <Text style={styles.sectionTitle}>Game Stats</Text>
 
@@ -293,5 +324,10 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     marginTop: 12,
+  },
+  languageRow: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 16,
   },
 });

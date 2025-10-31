@@ -19,6 +19,7 @@ import { generateQuestions, QuizQuestion } from "@/lib/gemini";
 import { saveMinimalQuestion } from "@/services/question.service";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { QUIZ_TOPICS } from "@/constants/topics";
+import { useI18n } from "@/contexts/I18nContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
@@ -31,6 +32,7 @@ export default function QuizPlayScreen() {
   const { topic } = useLocalSearchParams();
   const { profile, updateProfile, incrementScore } = useUserProfile();
   const insets = useSafeAreaInsets();
+  const { language } = useI18n();
 
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
@@ -65,11 +67,12 @@ export default function QuizPlayScreen() {
   const loadQuestions = async () => {
     try {
       setLoading(true);
+      const languageName = language === "vi" ? "Vietnamese" : "English";
       const generatedQuestions = await generateQuestions({
         topic: topicData?.name || "General Knowledge",
         difficulty: "Medium",
         count: QUESTIONS_PER_QUIZ,
-        language: "English",
+        language: languageName,
       });
       setQuestions(generatedQuestions);
     } catch (error: any) {
@@ -141,7 +144,7 @@ export default function QuizPlayScreen() {
       const id = await saveMinimalQuestion({
         content: q.question,
         correctAnswer: Array.isArray(q.correctAnswer) ? String((q.correctAnswer as string[])[0]) : String(q.correctAnswer as string),
-        language: "English",
+        language: language === "vi" ? "Vietnamese" : "English",
       });
       setMentorQuestionId(id);
     } catch (e) {
