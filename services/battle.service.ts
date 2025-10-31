@@ -7,12 +7,10 @@ import {
   onValue,
   off,
   push,
-  query,
-  orderByChild,
-  equalTo,
 } from "firebase/database";
 import { realtimeDb } from "@/lib/firebase";
 import type { BattleRoom, BattlePlayer, BattleAnswer, BattleResult } from "@/models";
+import { getUserProfile } from "@/services/user.service";
 
 const ROOMS_PATH = "battle_rooms";
 const RESULTS_PATH = "battle_results";
@@ -234,6 +232,54 @@ export async function getPublicRooms(): Promise<BattleRoom[]> {
   return Object.values(rooms).filter(
     (room) => room.isPublic && room.status === "waiting"
   );
+}
+
+export async function createRoom(
+  hostId: string,
+  topic: string,
+  difficulty: string,
+  password?: string
+): Promise<{ roomId: string; joined: boolean }> {
+  try {
+    console.log("createRoom called", { hostId, topic, difficulty, hasPassword: !!password });
+
+    const user = await getUserProfile(hostId);
+    const hostName = user?.displayName ?? `Player-${hostId.slice(0, 6)}`;
+
+    if (!password) {
+      const roomsRef = ref(realtimeDb, ROOMS_PATH);
+      const snapshot = await get(roomsRef);
+
+      if (snapshot.exists()) {
+        const rooms = snapshot.val() as Record<string, BattleRoom>;
+        const candidates = Object.values(rooms).filter((r) =>
+          r.status === "waiting" && r.isPublic && r.currentPlayers < r.maxPlayers && r.hostId !== hostId && r.topic === topic && r.difficulty === difficulty
+        );
+
+        const target = candidates.sort((a, b) => a.createdAt - b.createdAt)[0];
+
+        if (target) {
+          await joinBattleRoom(target.id, hostId, hostName);
+          console.log("Matched into existing room", target.id);
+          return { roomId: target.id, joined: true };
+        }
+      }
+    }
+
+    const roomId = await createBattleRoom(hostId, hostName, {
+      name: `${topic} • ${difficulty}`,
+      password,
+      topic,
+      difficulty,
+      maxPlayers: 2,
+    });
+
+    console.log("Created new room and waiting", roomId);
+    return { roomId, joined: false };
+  } catch (error) {
+    console.error("Error in createRoom:", error);
+    throw error;
+  }
 }
 
 export function subscribeToBattleRoom(
