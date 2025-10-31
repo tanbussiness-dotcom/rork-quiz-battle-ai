@@ -1,6 +1,7 @@
 import { createTRPCRouter } from "./create-context";
 import hiRoute from "./routes/example/hi/route";
 import evaluateBadgesProcedure from "./routes/badges/evaluate/route";
+import generateQuestionProcedure from "./routes/questions/generate/route";
 
 export const appRouter = createTRPCRouter({
   example: createTRPCRouter({
@@ -8,6 +9,9 @@ export const appRouter = createTRPCRouter({
   }),
   badges: createTRPCRouter({
     evaluate: evaluateBadgesProcedure,
+  }),
+  questions: createTRPCRouter({
+    generate: generateQuestionProcedure,
   }),
 });
 

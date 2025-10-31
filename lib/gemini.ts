@@ -26,7 +26,7 @@ export async function generateQuestions(
 ): Promise<QuizQuestion[]> {
   const { topic, difficulty, count, language = "English" } = params;
 
-  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   const prompt = `Generate ${count} quiz questions about "${topic}" with "${difficulty}" difficulty in ${language}.
 
@@ -56,11 +56,11 @@ Requirements:
     const result = await model.generateContent(prompt);
     const response = await result.response;
     let text = response.text();
-    
+
     text = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-    
+
     const questions = JSON.parse(text);
-    
+
     return questions.map((q: any, index: number) => ({
       ...q,
       id: `${Date.now()}_${index}`,
@@ -74,13 +74,64 @@ Requirements:
   }
 }
 
+export interface GenerateSingleQuestionParams {
+  topic: string;
+  difficulty: string; // expected: easy|medium|hard|challenge
+  language?: string; // ISO language name or code
+}
+
+export type UserRequestedQuestion = {
+  type: "multipleChoice" | "trueFalse" | "fillBlank" | "mediaBased" | "riddle";
+  content: string;
+  options?: string[];
+  correctAnswer: string;
+  explanation: string;
+  difficulty: "easy" | "medium" | "hard" | "challenge";
+};
+
+export async function generateSingleQuestion(
+  params: GenerateSingleQuestionParams
+): Promise<UserRequestedQuestion> {
+  const { topic, difficulty, language = "English" } = params;
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+  const prompt = `Generate exactly one quiz question on the topic "${topic}" with difficulty "${difficulty}" in ${language}.
+Return ONLY a JSON object with this exact shape and field names (no markdown, no backticks, no commentary):
+{
+  "type": "multipleChoice | trueFalse | fillBlank | mediaBased | riddle",
+  "content": "...",
+  "options": ["A", "B", "C", "D"],
+  "correctAnswer": "B",
+  "explanation": "Gemini provides reasoning why",
+  "difficulty": "${difficulty}"
+}
+Rules:
+- If type is trueFalse, options must be ["True", "False"] and correctAnswer must be one of them.
+- If type is fillBlank or riddle, omit options field.
+- Prefer multipleChoice unless the topic naturally fits another type.
+- content must be concise (max 200 chars) and unambiguous.
+- Ensure the response is valid JSON with double quotes and no trailing commas.`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    let text = response.text().trim();
+    text = text.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+    const parsed = JSON.parse(text) as UserRequestedQuestion;
+    return parsed;
+  } catch (error) {
+    console.error("Error generating single question:", error);
+    throw new Error("Failed to generate question");
+  }
+}
+
 export async function getAIExplanation(
   question: string,
   userAnswer: string,
   correctAnswer: string,
   language: string = "English"
 ): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   const prompt = `As an AI mentor, explain in ${language} why the answer to this question is "${correctAnswer}" and not "${userAnswer}".
 
