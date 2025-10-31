@@ -15,7 +15,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.rork.quiz-battle-ai"
+      "bundleIdentifier": "app.rork.quiz-battle-ai",
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
@@ -38,7 +39,8 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true

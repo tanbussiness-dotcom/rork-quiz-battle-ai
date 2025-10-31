@@ -1,18 +1,20 @@
 import createContextHook from "@nkzw/create-context-hook";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  User,
-  GoogleAuthProvider,
-  signInWithCredential,
-} from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { User, OAuthProvider, GoogleAuthProvider, signInWithCredential } from "firebase/auth";
+import { Platform } from "react-native";
+import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
-import { Platform } from "react-native";
+import { auth } from "@/lib/firebase";
+import {
+  registerUser,
+  loginUser,
+  logoutUser,
+  loginWithGoogle as googleLogin,
+  loginWithApple as appleLogin,
+  loginAnonymously as anonymousLogin,
+  onAuthStateChange,
+} from "@/services";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -20,9 +22,11 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
+  signInAnonymously: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -38,7 +42,8 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
   });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChange((currentUser) => {
+      console.log("Auth state changed:", currentUser?.uid);
       setUser(currentUser);
       setLoading(false);
     });
@@ -59,11 +64,12 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     }
   }, [response]);
 
-  const signUp = useCallback(async (email: string, password: string) => {
+  const signUp = useCallback(async (email: string, password: string, displayName: string) => {
     try {
       setError(null);
       setLoading(true);
-      await createUserWithEmailAndPassword(auth, email, password);
+      await registerUser(email, password, displayName);
+      console.log("User registered successfully");
     } catch (err: any) {
       console.error("Sign up error:", err);
       setError(err.message || "Failed to create account");
@@ -77,7 +83,8 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     try {
       setError(null);
       setLoading(true);
-      await signInWithEmailAndPassword(auth, email, password);
+      await loginUser(email, password);
+      console.log("User signed in successfully");
     } catch (err: any) {
       console.error("Sign in error:", err);
       setError(err.message || "Failed to sign in");
@@ -91,9 +98,8 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     try {
       setError(null);
       if (Platform.OS === 'web') {
-        const provider = new GoogleAuthProvider();
-        const { signInWithPopup } = await import('firebase/auth');
-        await signInWithPopup(auth, provider);
+        await googleLogin();
+        console.log("Google sign-in successful (web)");
       } else {
         await promptAsync();
       }
@@ -104,10 +110,65 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     }
   }, [promptAsync]);
 
+  const signInWithApple = useCallback(async () => {
+    try {
+      setError(null);
+      setLoading(true);
+
+      if (Platform.OS === 'web') {
+        await appleLogin();
+        console.log("Apple sign-in successful (web)");
+      } else if (Platform.OS === 'ios') {
+        const credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+        });
+
+        const provider = new OAuthProvider('apple.com');
+        const oauthCredential = provider.credential({
+          idToken: credential.identityToken!,
+        });
+
+        await signInWithCredential(auth, oauthCredential);
+        console.log("Apple sign-in successful (iOS)");
+      } else {
+        throw new Error("Apple Sign-In is only available on iOS and web");
+      }
+    } catch (err: any) {
+      if (err.code === 'ERR_REQUEST_CANCELED') {
+        console.log("Apple sign-in cancelled");
+      } else {
+        console.error("Apple sign-in error:", err);
+        setError(err.message || "Failed to sign in with Apple");
+        throw err;
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const signInAnonymously = useCallback(async () => {
+    try {
+      setError(null);
+      setLoading(true);
+      await anonymousLogin();
+      console.log("Anonymous sign-in successful");
+    } catch (err: any) {
+      console.error("Anonymous sign-in error:", err);
+      setError(err.message || "Failed to sign in anonymously");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       setError(null);
-      await signOut(auth);
+      await logoutUser();
+      console.log("User logged out successfully");
     } catch (err: any) {
       console.error("Logout error:", err);
       setError(err.message || "Failed to logout");
@@ -123,8 +184,10 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
       signUp,
       signIn,
       signInWithGoogle,
+      signInWithApple,
+      signInAnonymously,
       logout,
     }),
-    [user, loading, error, signUp, signIn, signInWithGoogle, logout]
+    [user, loading, error, signUp, signIn, signInWithGoogle, signInWithApple, signInAnonymously, logout]
   );
 });

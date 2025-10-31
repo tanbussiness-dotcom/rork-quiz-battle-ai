@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { Mail, Lock, ArrowLeft } from "lucide-react-native";
+import { Mail, Lock, ArrowLeft, User } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import GradientButton from "@/components/GradientButton";
 import GlowingCard from "@/components/GlowingCard";
@@ -21,14 +21,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { signUp, signInWithGoogle, loading } = useAuth();
+  const { signUp, signInWithGoogle, signInWithApple, signInAnonymously, loading } = useAuth();
   const insets = useSafeAreaInsets();
+  const [displayName, setDisplayName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
 
   const handleRegister = async () => {
-    if (!email || !password || !confirmPassword) {
+    if (!displayName || !email || !password || !confirmPassword) {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
@@ -44,7 +45,7 @@ export default function RegisterScreen() {
     }
 
     try {
-      await signUp(email, password);
+      await signUp(email, password, displayName);
       router.replace("/home");
     } catch (error: any) {
       Alert.alert("Registration Failed", error.message || "Please try again");
@@ -57,6 +58,26 @@ export default function RegisterScreen() {
       router.replace("/home");
     } catch (error: any) {
       Alert.alert("Sign Up Failed", error.message || "Please try again");
+    }
+  };
+
+  const handleAppleSignUp = async () => {
+    try {
+      await signInWithApple();
+      router.replace("/home");
+    } catch (error: any) {
+      if (error.code !== 'ERR_REQUEST_CANCELED') {
+        Alert.alert("Sign Up Failed", error.message || "Please try again");
+      }
+    }
+  };
+
+  const handleAnonymousSignIn = async () => {
+    try {
+      await signInAnonymously();
+      router.replace("/home");
+    } catch (error: any) {
+      Alert.alert("Sign In Failed", error.message || "Please try again");
     }
   };
 
@@ -89,6 +110,18 @@ export default function RegisterScreen() {
             <Text style={styles.subtitle}>Join the quiz battle today</Text>
 
             <GlowingCard style={styles.card}>
+              <View style={styles.inputContainer}>
+                <User size={20} color={Colors.textSecondary} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Display Name"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                  autoCapitalize="words"
+                />
+              </View>
+
               <View style={styles.inputContainer}>
                 <Mail size={20} color={Colors.textSecondary} />
                 <TextInput
@@ -147,6 +180,22 @@ export default function RegisterScreen() {
               <GradientButton
                 title="Continue with Google"
                 onPress={handleGoogleSignUp}
+                variant="secondary"
+                style={styles.button}
+              />
+
+              {Platform.OS === 'ios' && (
+                <GradientButton
+                  title="Continue with Apple"
+                  onPress={handleAppleSignUp}
+                  variant="secondary"
+                  style={styles.button}
+                />
+              )}
+
+              <GradientButton
+                title="Continue as Guest"
+                onPress={handleAnonymousSignIn}
                 variant="secondary"
                 style={styles.button}
               />

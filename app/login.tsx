@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signInWithGoogle, loading } = useAuth();
+  const { signIn, signInWithGoogle, signInWithApple, signInAnonymously, loading } = useAuth();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -46,6 +46,26 @@ export default function LoginScreen() {
       router.replace("/home");
     } catch (error: any) {
       Alert.alert("Login Failed", error.message || "Please try again");
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    try {
+      await signInWithApple();
+      router.replace("/home");
+    } catch (error: any) {
+      if (error.code !== 'ERR_REQUEST_CANCELED') {
+        Alert.alert("Login Failed", error.message || "Please try again");
+      }
+    }
+  };
+
+  const handleAnonymousSignIn = async () => {
+    try {
+      await signInAnonymously();
+      router.replace("/home");
+    } catch (error: any) {
+      Alert.alert("Sign In Failed", error.message || "Please try again");
     }
   };
 
@@ -122,6 +142,22 @@ export default function LoginScreen() {
               <GradientButton
                 title="Continue with Google"
                 onPress={handleGoogleLogin}
+                variant="secondary"
+                style={styles.button}
+              />
+
+              {Platform.OS === 'ios' && (
+                <GradientButton
+                  title="Continue with Apple"
+                  onPress={handleAppleLogin}
+                  variant="secondary"
+                  style={styles.button}
+                />
+              )}
+
+              <GradientButton
+                title="Continue as Guest"
+                onPress={handleAnonymousSignIn}
                 variant="secondary"
                 style={styles.button}
               />
