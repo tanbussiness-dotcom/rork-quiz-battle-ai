@@ -34,16 +34,36 @@ export async function getLeaderboard(
 }
 
 export async function updateLeaderboardEntry(
-  entry: Omit<LeaderboardEntry, "rank">
+  entry: { 
+    userId: string;
+    displayName?: string;
+    photoURL?: string;
+    score: number;
+    level?: number;
+    rank?: string;
+    type: LeaderboardQuery["type"];
+    period: LeaderboardQuery["period"];
+    updatedAt: number;
+  }
 ): Promise<void> {
   const docId = `${entry.userId}_${entry.type}_${entry.period}`;
   const docRef = doc(db, LEADERBOARD_COLLECTION, docId);
 
+  const { displayName, photoURL, rank, level, score, type, period, updatedAt, userId } = entry;
+  
   await setDoc(
     docRef,
     {
-      ...entry,
-      updatedAt: Date.now(),
+      id: docId,
+      userId,
+      username: displayName || '',
+      avatar: photoURL,
+      rank: 0,
+      points: score,
+      mode: type,
+      period,
+      gamesPlayed: 0,
+      updatedAt,
     },
     { merge: true }
   );

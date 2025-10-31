@@ -5,7 +5,7 @@ import {
   updateDoc,
   increment,
   arrayUnion,
-  serverTimestamp,
+  FieldValue,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { User, UserPreferences, UserStats, RankTier } from "@/models";
@@ -162,4 +162,196 @@ export async function incrementStat(
     [`stats.${statKey}`]: increment(amount),
     updatedAt: Date.now(),
   });
+}
+
+export async function updatePlayerProgress(
+  uid: string,
+  score: number,
+  correctAnswers: number,
+  totalQuestions: number,
+  mode: 'solo' | 'battle',
+  topic?: string
+): Promise<void> {
+  try {
+    const user = await getUserProfile(uid);
+    if (!user) throw new Error('User not found');
+
+    const xpGain = correctAnswers * 10;
+    const pointsGain = score;
+    const newXP = user.xp + xpGain;
+    const newTotalPoints = user.totalPoints + pointsGain;
+
+    const xpPerLevel = 100;
+    const newLevel = Math.floor(newXP / xpPerLevel) + 1;
+    const leveledUp = newLevel > user.level;
+
+    const accuracy = totalQuestions > 0 ? (correctAnswers / totalQuestions) * 100 : 0;
+    
+    const updates: Partial<User> = {
+      xp: newXP,
+      totalPoints: newTotalPoints,
+      level: newLevel,
+      updatedAt: Date.now(),
+    };
+
+    const docRef = doc(db, USERS_COLLECTION, uid);
+    await updateDoc(docRef, updates);
+
+    const statsUpdates: Record<string, FieldValue | number> = {
+      totalGamesPlayed: increment(1),
+      totalCorrectAnswers: increment(correctAnswers),
+      totalWrongAnswers: increment(totalQuestions - correctAnswers),
+    };
+
+    if (mode === 'battle') {
+      const won = score > 0;
+      if (won) {
+        statsUpdates['battlesWon'] = increment(1);
+        statsUpdates['currentStreak'] = increment(1);
+        
+        if (user.stats.currentStreak + 1 > user.stats.longestStreak) {
+          statsUpdates['longestStreak'] = user.stats.currentStreak + 1;
+        }
+      } else {
+        statsUpdates['battlesLost'] = increment(1);
+        statsUpdates['currentStreak'] = 0;
+      }
+
+      const totalBattles = user.stats.battlesWon + user.stats.battlesLost + (won ? 1 : 0);
+      const totalWins = user.stats.battlesWon + (won ? 1 : 0);
+      statsUpdates['winRate'] = totalBattles > 0 ? (totalWins / totalBattles) * 100 : 0;
+    }
+
+    if (topic) {
+      const topicKey = `topicStats.${topic}`;
+      const currentTopicStat = user.stats.topicStats[topic] || {
+        topic,
+        questionsAnswered: 0,
+        correctAnswers: 0,
+        accuracy: 0,
+      };
+
+      const newQuestionsAnswered = currentTopicStat.questionsAnswered + totalQuestions;
+      const newCorrectAnswers = currentTopicStat.correctAnswers + correctAnswers;
+      const newAccuracy = (newCorrectAnswers / newQuestionsAnswered) * 100;
+
+      statsUpdates[`${topicKey}.questionsAnswered`] = newQuestionsAnswered;
+      statsUpdates[`${topicKey}.correctAnswers`] = newCorrectAnswers;
+      statsUpdates[`${topicKey}.accuracy`] = newAccuracy;
+    }
+
+    await updateDoc(docRef, {
+      ...statsUpdates,
+      updatedAt: Date.now(),
+    });
+
+    const newBadges = await checkAndUnlockBadges(uid, {
+      totalPoints: newTotalPoints,
+      correctAnswers: user.stats.totalCorrectAnswers + correctAnswers,
+      battlesWon: mode === 'battle' && score > 0 ? user.stats.battlesWon + 1 : user.stats.battlesWon,
+      currentStreak: mode === 'battle' && score > 0 ? user.stats.currentStreak + 1 : user.stats.currentStreak,
+      rank: user.rank,
+      topic,
+      topicStats: user.stats.topicStats,
+    });
+
+    if (newBadges.length > 0) {
+      for (const badge of newBadges) {
+        await addBadge(uid, badge);
+      }
+    }
+
+    const { updateLeaderboardEntry } = await import('./leaderboard.service');
+    const periods: ('daily' | 'weekly' | 'monthly' | 'all_time')[] = ['daily', 'weekly', 'monthly', 'all_time'];
+    
+    for (const period of periods) {
+      await updateLeaderboardEntry({
+        userId: uid,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        score: mode === 'solo' ? newTotalPoints : user.challengePoints,
+        level: newLevel,
+        rank: user.rank,
+        type: mode,
+        period,
+        updatedAt: Date.now(),
+      });
+    }
+
+    console.log('Player progress updated:', {
+      uid,
+      xpGain,
+      pointsGain,
+      newLevel,
+      leveledUp,
+      newBadges,
+    });
+  } catch (error) {
+    console.error('Error updating player progress:', error);
+    throw error;
+  }
+}
+
+async function checkAndUnlockBadges(
+  uid: string,
+  data: {
+    totalPoints: number;
+    correctAnswers: number;
+    battlesWon: number;
+    currentStreak: number;
+    rank: RankTier;
+    topic?: string;
+    topicStats: Record<string, any>;
+  }
+): Promise<string[]> {
+  const user = await getUserProfile(uid);
+  if (!user) return [];
+
+  const newBadges: string[] = [];
+
+  const badgeConditions: { id: string; condition: boolean }[] = [
+    {
+      id: 'wise_scholar',
+      condition: data.totalPoints >= 1000 && !user.badges.includes('wise_scholar'),
+    },
+    {
+      id: 'history_warrior',
+      condition:
+        data.topic === 'history' &&
+        data.battlesWon >= 10 &&
+        !user.badges.includes('history_warrior'),
+    },
+    {
+      id: 'battle_god',
+      condition: data.rank === 'Diamond' && !user.badges.includes('battle_god'),
+    },
+    {
+      id: 'knowledge_king',
+      condition: false,
+    },
+    {
+      id: 'hard_worker',
+      condition: data.currentStreak >= 7 && !user.badges.includes('hard_worker'),
+    },
+    {
+      id: 'math_genius',
+      condition:
+        (data.topicStats['mathematics']?.correctAnswers || 0) >= 50 &&
+        !user.badges.includes('math_genius'),
+    },
+    {
+      id: 'logic_master',
+      condition:
+        (data.topicStats['logic']?.questionsAnswered || 0) >= 30 &&
+        !user.badges.includes('logic_master'),
+    },
+  ];
+
+  for (const badge of badgeConditions) {
+    if (badge.condition) {
+      newBadges.push(badge.id);
+    }
+  }
+
+  return newBadges;
 }
