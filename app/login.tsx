@@ -206,7 +206,7 @@ export default function LoginScreen() {
                   >
                     <Text style={styles.socialText}>G</Text>
                   </TouchableOpacity>
-                  {Platform.OS !== 'android' && (
+                  {Platform.OS === 'ios' && (
                     <TouchableOpacity
                       testID="login-apple"
                       onPress={handleAppleLogin}

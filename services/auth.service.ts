@@ -163,7 +163,9 @@ export async function loginWithApple(): Promise<AuthResult> {
     let userCredential;
 
     if (Platform.OS === "web") {
-      userCredential = await signInWithPopup(auth, provider);
+      throw new Error(
+        "Apple Sign-In on web requires adding your app's domain (including localhost when developing) to Firebase Auth Authorized domains and enabling Apple provider."
+      );
     } else {
       await signInWithRedirect(auth, provider);
       userCredential = await getRedirectResult(auth);

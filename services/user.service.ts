@@ -20,7 +20,6 @@ export async function createUserProfile(
     uid,
     email: data.email,
     displayName: data.displayName,
-    photoURL: data.photoURL,
     level: 1,
     xp: 0,
     totalPoints: 0,
@@ -49,7 +48,11 @@ export async function createUserProfile(
     updatedAt: Date.now(),
   };
 
-  await setDoc(doc(db, USERS_COLLECTION, uid), user);
+  if (typeof data.photoURL === 'string') {
+    user.photoURL = data.photoURL;
+  }
+
+  await setDoc(doc(db, USERS_COLLECTION, uid), user as Record<string, any>);
   return user;
 }
 
