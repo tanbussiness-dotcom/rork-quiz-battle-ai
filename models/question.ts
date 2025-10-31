@@ -13,13 +13,15 @@ export type DifficultyLevel = "Easy" | "Medium" | "Hard" | "Challenge";
 export interface Question {
   id: string;
   type: QuestionType;
-  question: string;
+  content: string;
   options?: string[];
   correctAnswer: string | string[];
   explanation: string;
   difficulty: DifficultyLevel;
   topic: string;
-  imageUrl?: string;
+  mediaUrl?: string;
+  source: "ai" | "manual";
+  createdByAI: boolean;
   timeLimit: number;
   createdAt: number;
   language: string;

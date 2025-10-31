@@ -1,15 +1,17 @@
 export interface User {
   uid: string;
+  username: string;
   email: string;
-  displayName: string;
-  photoURL?: string;
+  avatar?: string;
   level: number;
   xp: number;
   totalPoints: number;
-  challengePoints: number;
+  rankPoints: number;
   rank: RankTier;
   badges: string[];
   completedQuestions: string[];
+  progress: UserProgress;
+  language: "en" | "vi" | "zh" | "ja";
   preferences: UserPreferences;
   stats: UserStats;
   createdAt: number;
@@ -30,6 +32,14 @@ export interface UserPreferences {
   notificationsEnabled: boolean;
   soundEnabled: boolean;
   hapticsEnabled: boolean;
+}
+
+export interface UserProgress {
+  soloLevel: number;
+  soloXP: number;
+  battleLevel: number;
+  battleXP: number;
+  lastPlayedAt: number;
 }
 
 export interface UserStats {

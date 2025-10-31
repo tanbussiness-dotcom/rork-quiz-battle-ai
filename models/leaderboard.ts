@@ -2,16 +2,17 @@ export type LeaderboardType = "solo" | "battle";
 export type LeaderboardPeriod = "daily" | "weekly" | "monthly" | "all_time";
 
 export interface LeaderboardEntry {
+  id: string;
   userId: string;
-  displayName: string;
-  photoURL?: string;
+  username: string;
+  avatar?: string;
   rank: number;
-  score: number;
   points: number;
+  mode: LeaderboardType;
+  period: LeaderboardPeriod;
   gamesPlayed: number;
   winRate?: number;
-  period: LeaderboardPeriod;
-  type: LeaderboardType;
+  accuracy?: number;
   updatedAt: number;
 }
 

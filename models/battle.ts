@@ -38,6 +38,28 @@ export interface BattleAnswer {
   answeredAt: number;
 }
 
+export interface Match {
+  id: string;
+  roomId: string;
+  hostId: string;
+  opponentId?: string;
+  questions: string[];
+  scores: Record<string, number>;
+  result: MatchResult;
+  topic: string;
+  difficulty: string;
+  status: BattleStatus;
+  createdAt: number;
+  completedAt?: number;
+}
+
+export interface MatchResult {
+  winnerId: string;
+  winnerScore: number;
+  loserScore: number;
+  rankChanges: Record<string, number>;
+}
+
 export interface BattleResult {
   battleId: string;
   winnerId: string;
