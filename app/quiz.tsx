@@ -30,7 +30,7 @@ const TIME_PER_QUESTION = 30;
 
 export default function QuizPlayScreen() {
   const router = useRouter();
-  const { topic } = useLocalSearchParams();
+  const { topic, difficulty } = useLocalSearchParams<{ topic?: string; difficulty?: string }>();
   const { profile, updateProfile, incrementScore } = useUserProfile();
   const insets = useSafeAreaInsets();
   const { language } = useI18n();
@@ -89,9 +89,12 @@ export default function QuizPlayScreen() {
         setQuestions(mapped);
         return;
       }
+      const chosenDifficulty = (typeof difficulty === "string" && difficulty.length > 0)
+        ? (difficulty[0].toUpperCase() + difficulty.slice(1).toLowerCase())
+        : "Medium";
       const generatedQuestions = await generateQuestions({
         topic: topicData?.name || "General Knowledge",
-        difficulty: "Medium",
+        difficulty: chosenDifficulty,
         count: QUESTIONS_PER_QUIZ,
         language: languageName,
       });
