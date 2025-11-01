@@ -9,4 +9,7 @@ EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
 EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
 
 # OpenAI (ChatGPT) Configuration
+# For client-side (not recommended to expose API key)
 EXPO_PUBLIC_OPENAI_API_KEY=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
+# For server-side (backend API routes)
+OPENAI_API_KEY=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
