@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -7,10 +7,11 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Dimensions,
 } from "react-native";
 import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { X, Check, Clock } from "lucide-react-native";
+import { X, Check } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import GlowingCard from "@/components/GlowingCard";
 import AIMentor from "@/components/AIMentor";
@@ -24,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import Svg, { Circle } from "react-native-svg";
 
 const QUESTIONS_PER_QUIZ = 10;
 const TIME_PER_QUESTION = 30;
@@ -43,8 +45,11 @@ export default function QuizPlayScreen() {
   const [loading, setLoading] = useState<boolean>(true);
   const [timeLeft, setTimeLeft] = useState<number>(TIME_PER_QUESTION);
   const [answered, setAnswered] = useState<boolean>(false);
-  const [fadeAnim] = useState(new Animated.Value(1));
   const [mentorQuestionId, setMentorQuestionId] = useState<string | null>(null);
+  const slideX = useRef(new Animated.Value(0)).current;
+  const shakeX = useRef(new Animated.Value(0)).current;
+  const [flashColor, setFlashColor] = useState<string | null>(null);
+  const containerWidth = Dimensions.get("window").width;
 
   const topicData = QUIZ_TOPICS.find((t) => t.id === topic);
 
@@ -57,10 +62,8 @@ export default function QuizPlayScreen() {
       const timer = setInterval(() => {
         setTimeLeft((prev) => prev - 1);
       }, 1000);
-
       return () => clearInterval(timer);
     }
-
     if (timeLeft === 0 && !answered) {
       handleTimeout();
     }
@@ -130,17 +133,28 @@ export default function QuizPlayScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
       setScore((prev) => prev + 10);
+      setFlashColor("rgba(0, 230, 168, 0.25)");
+      setTimeout(() => setFlashColor(null), 300);
     } else {
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
+      Animated.sequence([
+        Animated.timing(shakeX, { toValue: 8, duration: 60, useNativeDriver: true }),
+        Animated.timing(shakeX, { toValue: -8, duration: 60, useNativeDriver: true }),
+        Animated.timing(shakeX, { toValue: 6, duration: 60, useNativeDriver: true }),
+        Animated.timing(shakeX, { toValue: -6, duration: 60, useNativeDriver: true }),
+        Animated.timing(shakeX, { toValue: 0, duration: 60, useNativeDriver: true }),
+      ]).start();
+      setFlashColor("rgba(255, 71, 87, 0.2)");
+      setTimeout(() => setFlashColor(null), 300);
     }
   };
 
   const handleNext = () => {
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 200,
+    Animated.timing(slideX, {
+      toValue: -containerWidth,
+      duration: 220,
       useNativeDriver: true,
     }).start(() => {
       if (currentQuestionIndex < questions.length - 1) {
@@ -148,10 +162,10 @@ export default function QuizPlayScreen() {
         setSelectedAnswer(null);
         setAnswered(false);
         setTimeLeft(TIME_PER_QUESTION);
-        
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 200,
+        slideX.setValue(containerWidth);
+        Animated.timing(slideX, {
+          toValue: 0,
+          duration: 220,
           useNativeDriver: true,
         }).start();
       } else {
@@ -229,6 +243,9 @@ export default function QuizPlayScreen() {
 
   const currentQuestion = questions[currentQuestionIndex];
   const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
+  const ringRadius = 28;
+  const circumference = 2 * Math.PI * ringRadius;
+  const dashOffset = circumference * (1 - timeLeft / TIME_PER_QUESTION);
 
   return (
     <View style={styles.container}>
@@ -237,22 +254,36 @@ export default function QuizPlayScreen() {
         colors={[Colors.background, Colors.surface]}
         style={styles.gradient}
       >
-        <View style={[styles.content, { paddingTop: insets.top + 20 }]}>
+        <View style={[styles.content, { paddingTop: insets.top + 20 }]} testID="solo-quiz-screen">
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.closeButton}
               onPress={() => router.back()}
+              testID="close-quiz"
             >
               <X size={24} color={Colors.text} />
             </TouchableOpacity>
-            <View style={styles.timerContainer}>
-              <Clock size={20} color={timeLeft <= 10 ? Colors.error : Colors.primary} />
-              <Text style={[
-                styles.timerText,
-                timeLeft <= 10 && styles.timerWarning
-              ]}>
-                {timeLeft}s
-              </Text>
+            <View style={styles.timerRingWrap}>
+              <View style={styles.timerSvgWrap}>
+                <Svg width={72} height={72} viewBox="0 0 72 72">
+                  <Circle cx={36} cy={36} r={ringRadius} stroke={"rgba(255,255,255,0.08)"} strokeWidth={4} fill="none" />
+                  <Circle
+                    cx={36}
+                    cy={36}
+                    r={ringRadius}
+                    stroke={Colors.primary}
+                    strokeWidth={4}
+                    strokeDasharray={`${circumference}`}
+                    strokeDashoffset={dashOffset}
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                </Svg>
+                <View style={styles.timerCenter}>
+                  <Text style={[styles.timerText, timeLeft <= 10 && styles.timerWarning]}>{timeLeft}</Text>
+                </View>
+              </View>
+              <Text style={styles.timerLabel}>Time</Text>
             </View>
           </View>
 
@@ -265,7 +296,7 @@ export default function QuizPlayScreen() {
             </Text>
           </View>
 
-          <Animated.View style={[styles.questionContainer, { opacity: fadeAnim }]}>
+          <Animated.View style={[styles.questionContainer, { transform: [{ translateX: Animated.add(slideX, shakeX) }] }]} testID="question-wrapper">
             <GlowingCard style={styles.questionCard}>
               <Text style={styles.questionText}>{currentQuestion.question}</Text>
             </GlowingCard>
@@ -282,7 +313,8 @@ export default function QuizPlayScreen() {
                     key={index}
                     onPress={() => handleAnswer(option)}
                     disabled={answered}
-                    activeOpacity={0.8}
+                    activeOpacity={0.9}
+                    testID={`option-${index}`}
                   >
                     <View
                       style={[
@@ -290,6 +322,7 @@ export default function QuizPlayScreen() {
                         isSelected && styles.optionSelected,
                         showCorrect && styles.optionCorrect,
                         showWrong && styles.optionWrong,
+                        selectedAnswer && !isSelected ? styles.optionFaded : null,
                       ]}
                     >
                       <Text
@@ -313,14 +346,14 @@ export default function QuizPlayScreen() {
             <View style={styles.footer}>
               {selectedAnswer === currentQuestion.correctAnswer ? (
                 <GlowingCard style={styles.feedbackCard}>
-                  <Text style={styles.feedbackTitle}>🎉 Correct!</Text>
+                  <Text style={styles.feedbackTitle}>Correct</Text>
                   <Text style={styles.feedbackText}>
                     {currentQuestion.explanation}
                   </Text>
                 </GlowingCard>
               ) : (
                 <GlowingCard style={[styles.feedbackCard, styles.feedbackError]} testID="feedback-incorrect">
-                  <Text style={styles.feedbackTitle}>❌ Incorrect</Text>
+                  <Text style={styles.feedbackTitle}>Incorrect</Text>
                   <Text style={styles.feedbackText}>
                     {currentQuestion.explanation}
                   </Text>
@@ -351,6 +384,9 @@ export default function QuizPlayScreen() {
             <Text style={styles.scoreText}>Score: {score}</Text>
           </View>
         </View>
+        {flashColor && (
+          <View pointerEvents="none" style={[styles.flashOverlay, { backgroundColor: flashColor }]} />
+        )}
       </LinearGradient>
     </View>
   );
@@ -392,14 +428,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  timerContainer: {
-    flexDirection: "row",
+  timerRingWrap: {
     alignItems: "center",
-    gap: 8,
-    backgroundColor: Colors.surfaceLight,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    justifyContent: "center",
+  },
+  timerSvgWrap: {
+    width: 72,
+    height: 72,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  timerCenter: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  timerLabel: {
+    marginTop: 6,
+    color: Colors.textSecondary,
+    fontSize: 12,
+    textAlign: "center",
   },
   timerText: {
     fontSize: 16,
@@ -459,6 +511,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
     backgroundColor: Colors.surface,
   },
+  optionFaded: {
+    opacity: 0.5,
+  },
   optionCorrect: {
     borderColor: Colors.success,
     backgroundColor: "rgba(0, 230, 168, 0.1)",
@@ -515,5 +570,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700" as const,
     color: Colors.primary,
+  },
+  flashOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
 });
