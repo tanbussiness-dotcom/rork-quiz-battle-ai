@@ -76,7 +76,12 @@ export default function QuizPlayScreen() {
       if (!online) {
         const offline = await getOfflineQuestions();
         if (offline.length === 0) {
-          Alert.alert("Offline", "No cached questions found. Connect to the internet to generate questions.", [{ text: "OK", onPress: () => router.back() }]);
+          Alert.alert(
+            "Offline",
+            "No cached questions found. Connect to the internet to generate questions.",
+            [{ text: "OK", onPress: () => router.back() }]
+          );
+          setQuestions([]);
           return;
         }
         const mapped: QuizQuestion[] = offline.slice(0, QUESTIONS_PER_QUIZ).map((q) => ({
@@ -101,12 +106,13 @@ export default function QuizPlayScreen() {
         count: QUESTIONS_PER_QUIZ,
         language: languageName,
       });
-      setQuestions(generatedQuestions);
+      setQuestions(generatedQuestions ?? []);
     } catch (error: any) {
       console.error("Error loading questions:", error);
       Alert.alert("Error", "Failed to load questions. Please try again.", [
         { text: "OK", onPress: () => router.back() },
       ]);
+      setQuestions([]);
     } finally {
       setLoading(false);
     }
@@ -232,9 +238,24 @@ export default function QuizPlayScreen() {
         >
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>
-              Generating AI questions...
-            </Text>
+            <Text style={styles.loadingText}>Generating AI questions...</Text>
+          </View>
+        </LinearGradient>
+      </View>
+    );
+  }
+
+  if (!questions || questions.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <LinearGradient colors={[Colors.background, Colors.surface]} style={styles.gradient}>
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>No questions available.</Text>
+            <GradientButton title="Retry" onPress={loadQuestions} />
+            <TouchableOpacity onPress={() => router.back()} testID="back-from-empty">
+              <Text style={styles.loadingText}>Go Back</Text>
+            </TouchableOpacity>
           </View>
         </LinearGradient>
       </View>
@@ -242,7 +263,7 @@ export default function QuizPlayScreen() {
   }
 
   const currentQuestion = questions[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
+  const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
   const ringRadius = 28;
   const circumference = 2 * Math.PI * ringRadius;
   const dashOffset = circumference * (1 - timeLeft / TIME_PER_QUESTION);
