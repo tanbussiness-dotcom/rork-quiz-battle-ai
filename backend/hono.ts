@@ -6,6 +6,11 @@ import { createContext } from "./trpc/create-context";
 
 const app = new Hono();
 
+console.log("🔍 [Quiz Battle AI] OPENAI_API_KEY exists:", !!process.env.OPENAI_API_KEY);
+if (process.env.OPENAI_API_KEY) {
+  console.log("✅ OpenAI setup verified. Ready to generate quiz questions.");
+}
+
 app.use("*", cors());
 
 app.use(

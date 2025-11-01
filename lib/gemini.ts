@@ -1,4 +1,3 @@
-import { generateText } from "@rork/toolkit-sdk";
 
 console.log("🔍 [Quiz Battle AI] Checking OpenAI key availability...");
 console.log("🔍 [Quiz Battle AI] OPENAI_API_KEY exists:", !!process.env.OPENAI_API_KEY);
@@ -38,19 +37,38 @@ interface Message {
 
 async function callAI(messages: { role: "system" | "user" | "assistant"; content: string }[]) {
   try {
-    const formattedMessages: Message[] = messages
-      .filter((m) => m.role !== "system")
-      .map((m) => ({
-        role: m.role as MessageRole,
-        content: m.content,
-      }));
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      console.error("Missing OpenAI API key. Set OPENAI_API_KEY in environment.");
+      throw new Error("Missing OpenAI API key. Set OPENAI_API_KEY in environment.");
+    }
 
-    const systemMessage = messages.find((m) => m.role === "system");
-    const prompt = systemMessage
-      ? `${systemMessage.content}\n\n${formattedMessages[formattedMessages.length - 1].content}`
-      : formattedMessages[formattedMessages.length - 1].content as string;
+    const chatMessages = messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
 
-    const text = await generateText(prompt);
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: chatMessages,
+        temperature: 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenAI API error:", response.status, errorText);
+      throw new Error(`OpenAI request failed: ${response.status}`);
+    }
+
+    const data: any = await response.json();
+    const text: string = data?.choices?.[0]?.message?.content ?? "";
     return text;
   } catch (error) {
     console.error("AI request error:", error);
