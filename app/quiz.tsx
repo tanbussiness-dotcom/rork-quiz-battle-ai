@@ -74,8 +74,12 @@ export default function QuizPlayScreen() {
   const loadQuestions = async () => {
     try {
       setLoading(true);
+      console.log("🔍 [Quiz] Starting to load questions...");
+      console.log("🔍 [Quiz] Topic:", topicData?.name, "Difficulty:", difficulty, "Language:", language);
+      
       const languageName = language === "vi" ? "Vietnamese" : "English";
       if (!online) {
+        console.log("🔍 [Quiz] Offline mode - loading cached questions");
         const offline = await getOfflineQuestions();
         if (offline.length === 0) {
           Alert.alert(
@@ -99,20 +103,25 @@ export default function QuizPlayScreen() {
         setQuestions(mapped);
         return;
       }
+      
       const chosenDifficulty = (typeof difficulty === "string" && difficulty.length > 0)
         ? difficulty.toLowerCase() as "easy" | "medium" | "hard" | "challenge"
         : "medium";
       
-      // Generate questions one by one using tRPC
+      console.log("🔍 [Quiz] Generating", QUESTIONS_PER_QUIZ, "questions online...");
+      
       const generatedQuestions: QuizQuestion[] = [];
       for (let i = 0; i < QUESTIONS_PER_QUIZ; i++) {
+        console.log(`🔍 [Quiz] Generating question ${i + 1}/${QUESTIONS_PER_QUIZ}...`);
+        
         const result = await generateQuestionMutation.mutateAsync({
           topic: topicData?.name || "General Knowledge",
           difficulty: chosenDifficulty,
           language: language === "vi" ? "vi" : "en",
         });
         
-        // Convert to QuizQuestion format
+        console.log(`✅ [Quiz] Question ${i + 1} generated successfully`);
+        
         let questionType: QuizQuestion["type"] = "multiple_choice";
         if (result.type === "true_false") questionType = "true_false";
         else if (result.type === "fill_blank") questionType = "fill_blank";
@@ -130,10 +139,24 @@ export default function QuizPlayScreen() {
         generatedQuestions.push(quizQuestion);
       }
       
+      console.log("✅ [Quiz] All questions generated successfully:", generatedQuestions.length);
       setQuestions(generatedQuestions);
     } catch (error: any) {
-      console.error("Error loading questions:", error);
-      Alert.alert("Error", "Failed to load questions. Please try again.", [
+      console.error("❌ [Quiz] Error loading questions:", error);
+      console.error("❌ [Quiz] Error details:", error.message);
+      console.error("❌ [Quiz] Error stack:", error.stack);
+      
+      let errorMessage = "Failed to load questions. ";
+      
+      if (error.message?.includes("Failed to fetch") || error.message?.includes("fetch")) {
+        errorMessage += "Cannot connect to the server. Please check your internet connection and try again.";
+      } else if (error.message?.includes("OpenAI")) {
+        errorMessage += "AI service is currently unavailable. Please try again later.";
+      } else {
+        errorMessage += error.message || "Please try again.";
+      }
+      
+      Alert.alert("Error", errorMessage, [
         { text: "OK", onPress: () => router.back() },
       ]);
       setQuestions([]);
