@@ -6,12 +6,28 @@ import { createContext } from "./trpc/create-context";
 
 const app = new Hono();
 
-console.log("🔍 [Quiz Battle AI] OPENAI_API_KEY exists:", !!process.env.OPENAI_API_KEY);
+console.log("🚀 [Backend] Starting Quiz Battle AI backend...");
+console.log("🔍 [Backend] OPENAI_API_KEY exists:", !!process.env.OPENAI_API_KEY);
 if (process.env.OPENAI_API_KEY) {
-  console.log("✅ OpenAI setup verified. Ready to generate quiz questions.");
+  console.log("✅ [Backend] OpenAI setup verified. Ready to generate quiz questions.");
+  console.log("✅ [Backend] API Key length:", process.env.OPENAI_API_KEY.length);
+} else {
+  console.error("❌ [Backend] WARNING: OPENAI_API_KEY not found! Question generation will fail.");
 }
 
 app.use("*", cors());
+
+app.onError((err, c) => {
+  console.error("❌ [Backend] Unhandled error:", err);
+  return c.json(
+    {
+      error: "Internal server error",
+      message: err.message,
+      path: c.req.url,
+    },
+    500
+  );
+});
 
 app.use(
   "/api/trpc/*",
@@ -23,7 +39,25 @@ app.use(
 );
 
 app.get("/", (c) => {
-  return c.json({ status: "ok", message: "API is running" });
+  return c.json({ 
+    status: "ok", 
+    message: "Quiz Battle AI Backend",
+    endpoints: {
+      health: "/",
+      testOpenAI: "/test-openai",
+      trpc: "/api/trpc"
+    },
+    openAIConfigured: !!process.env.OPENAI_API_KEY
+  });
+});
+
+app.get("/api", (c) => {
+  return c.json({ 
+    status: "ok", 
+    message: "API endpoint",
+    trpcEndpoint: "/api/trpc",
+    openAIConfigured: !!process.env.OPENAI_API_KEY
+  });
 });
 
 app.get("/test-openai", async (c) => {

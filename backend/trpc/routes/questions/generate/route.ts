@@ -50,9 +50,21 @@ const generateQuestionProcedure = publicProcedure
     console.log("🔍 [Generate Question] OPENAI_API_KEY exists:", !!process.env.OPENAI_API_KEY);
     console.log("🔍 [Generate Question] Key length:", process.env.OPENAI_API_KEY?.length || 0);
     
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("❌ [Generate Question] Missing OPENAI_API_KEY");
+      throw new Error("OpenAI API key not configured on server. Please contact support.");
+    }
+    
     const { topic, difficulty, language } = input;
-    const ai = await generateSingleQuestion({ topic, difficulty, language });
-
+    
+    let ai;
+    try {
+      ai = await generateSingleQuestion({ topic, difficulty, language });
+    } catch (aiError: any) {
+      console.error("❌ [Generate Question] AI generation failed:", aiError);
+      throw new Error(`Failed to generate question: ${aiError.message}`);
+    }
+    
     const saved = {
       type: mapType(ai.type),
       content: ai.content,

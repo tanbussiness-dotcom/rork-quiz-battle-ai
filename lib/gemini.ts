@@ -1,12 +1,4 @@
 
-console.log("🔍 [Quiz Battle AI] Checking OpenAI key...");
-const hasKey = !!process.env.OPENAI_API_KEY;
-console.log("🔍 [Quiz Battle AI] OPENAI_API_KEY exists:", hasKey);
-console.log("🔍 [Quiz Battle AI] Key length:", process.env.OPENAI_API_KEY?.length || 0);
-
-if (!hasKey) {
-  console.error("❌ Missing OPENAI_API_KEY. Please set it in Rork AI environment.");
-}
 
 export interface QuizQuestion {
   id: string;
