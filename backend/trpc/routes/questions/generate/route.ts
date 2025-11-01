@@ -46,6 +46,10 @@ const COLLECTION = "questions";
 const generateQuestionProcedure = publicProcedure
   .input(inputSchema)
   .mutation(async ({ input }) => {
+    console.log("🔍 [Generate Question] Starting generation...");
+    console.log("🔍 [Generate Question] OPENAI_API_KEY exists:", !!process.env.OPENAI_API_KEY);
+    console.log("🔍 [Generate Question] Key length:", process.env.OPENAI_API_KEY?.length || 0);
+    
     const { topic, difficulty, language } = input;
     const ai = await generateSingleQuestion({ topic, difficulty, language });
 

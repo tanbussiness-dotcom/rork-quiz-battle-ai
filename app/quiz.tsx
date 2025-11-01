@@ -16,8 +16,9 @@ import Colors from "@/constants/colors";
 import GlowingCard from "@/components/GlowingCard";
 import AIMentor from "@/components/AIMentor";
 import GradientButton from "@/components/GradientButton";
-import { generateQuestions, QuizQuestion } from "@/lib/gemini";
+import { QuizQuestion } from "@/lib/gemini";
 import { saveMinimalQuestion, getOfflineQuestions } from "@/services/question.service";
+import { trpc } from "@/lib/trpc";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { QUIZ_TOPICS } from "@/constants/topics";
 import { useI18n } from "@/contexts/I18nContext";
@@ -36,6 +37,7 @@ export default function QuizPlayScreen() {
   const { profile, updateProfile, incrementScore } = useUserProfile();
   const insets = useSafeAreaInsets();
   const { language } = useI18n();
+  const generateQuestionMutation = trpc.questions.generate.useMutation();
 
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
@@ -98,15 +100,37 @@ export default function QuizPlayScreen() {
         return;
       }
       const chosenDifficulty = (typeof difficulty === "string" && difficulty.length > 0)
-        ? (difficulty[0].toUpperCase() + difficulty.slice(1).toLowerCase())
-        : "Medium";
-      const generatedQuestions = await generateQuestions({
-        topic: topicData?.name || "General Knowledge",
-        difficulty: chosenDifficulty,
-        count: QUESTIONS_PER_QUIZ,
-        language: languageName,
-      });
-      setQuestions(generatedQuestions ?? []);
+        ? difficulty.toLowerCase() as "easy" | "medium" | "hard" | "challenge"
+        : "medium";
+      
+      // Generate questions one by one using tRPC
+      const generatedQuestions: QuizQuestion[] = [];
+      for (let i = 0; i < QUESTIONS_PER_QUIZ; i++) {
+        const result = await generateQuestionMutation.mutateAsync({
+          topic: topicData?.name || "General Knowledge",
+          difficulty: chosenDifficulty,
+          language: language === "vi" ? "vi" : "en",
+        });
+        
+        // Convert to QuizQuestion format
+        let questionType: QuizQuestion["type"] = "multiple_choice";
+        if (result.type === "true_false") questionType = "true_false";
+        else if (result.type === "fill_blank") questionType = "fill_blank";
+        
+        const quizQuestion: QuizQuestion = {
+          id: result.id,
+          type: questionType,
+          question: result.content,
+          options: result.options || undefined,
+          correctAnswer: result.correctAnswer,
+          explanation: result.explanation,
+          difficulty: result.difficulty,
+          topic: result.topic,
+        };
+        generatedQuestions.push(quizQuestion);
+      }
+      
+      setQuestions(generatedQuestions);
     } catch (error: any) {
       console.error("Error loading questions:", error);
       Alert.alert("Error", "Failed to load questions. Please try again.", [
