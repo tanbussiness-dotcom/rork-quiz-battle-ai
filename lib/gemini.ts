@@ -1,7 +1,14 @@
 
-console.log("🔍 [Quiz Battle AI] Checking OpenAI key availability...");
-console.log("🔍 [Quiz Battle AI] OPENAI_API_KEY exists:", !!process.env.OPENAI_API_KEY);
+import { generateText } from "@rork/toolkit-sdk";
+
+console.log("🔍 [Quiz Battle AI] Checking OpenAI key...");
+const hasKey = !!process.env.OPENAI_API_KEY;
+console.log("🔍 [Quiz Battle AI] OPENAI_API_KEY exists:", hasKey);
 console.log("🔍 [Quiz Battle AI] Key length:", process.env.OPENAI_API_KEY?.length || 0);
+
+if (!hasKey) {
+  console.error("❌ Missing OPENAI_API_KEY. Please set it in Rork AI environment.");
+}
 
 export interface QuizQuestion {
   id: string;
@@ -21,193 +28,71 @@ export interface GenerateQuestionsParams {
   language?: string;
 }
 
-export function hasOpenAIKey(): boolean {
-  const hasKey = !!process.env.OPENAI_API_KEY;
-  console.log("🔍 [Quiz Battle AI] hasOpenAIKey called:", hasKey);
-  return hasKey;
-}
-
-type MessageRole = "user" | "assistant";
-type MessageContent = string | { type: "text"; text: string }[];
-
-interface Message {
-  role: MessageRole;
-  content: MessageContent;
-}
-
-async function callAI(messages: { role: "system" | "user" | "assistant"; content: string }[]) {
-  try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      console.error("Missing OpenAI API key. Set OPENAI_API_KEY in environment.");
-      throw new Error("Missing OpenAI API key. Set OPENAI_API_KEY in environment.");
-    }
-
-    const chatMessages = messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: chatMessages,
-        temperature: 0.3,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenAI API error:", response.status, errorText);
-      throw new Error(`OpenAI request failed: ${response.status}`);
-    }
-
-    const data: any = await response.json();
-    const text: string = data?.choices?.[0]?.message?.content ?? "";
-    return text;
-  } catch (error) {
-    console.error("AI request error:", error);
-    throw new Error("AI request failed");
+async function callOpenAI(prompt: string): Promise<string> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("Missing OpenAI API key. Please set OPENAI_API_KEY in environment.");
   }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert quiz generator. You return only valid JSON without markdown or extra text.",
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.8,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error("❌ [OpenAI Error]", res.status, err);
+    throw new Error(`OpenAI API error: ${res.status}`);
+  }
+
+  const data: any = await res.json();
+  const text: string = data.choices?.[0]?.message?.content?.trim?.() ?? "";
+  return text.replace(/```json|```/g, "").trim();
 }
 
-export async function generateQuestions(
-  params: GenerateQuestionsParams
-): Promise<QuizQuestion[]> {
+export async function generateQuestions(params: GenerateQuestionsParams): Promise<QuizQuestion[]> {
   const { topic, difficulty, count, language = "English" } = params;
 
-  if (!hasOpenAIKey()) {
-    console.log("ℹ️ [Quiz Battle AI] OPENAI_API_KEY not set. Returning mock questions.");
-    const mocks: QuizQuestion[] = Array.from({ length: count }).map((_, i) => ({
-      id: `${Date.now()}_${i}`,
-      type: i % 2 === 0 ? "multiple_choice" : "true_false",
-      question:
-        i % 2 === 0
-          ? `Sample question ${i + 1} about ${topic}?`
-          : `"${topic}" is related to technology. True or False?`,
-      options: i % 2 === 0 ? ["Option A", "Option B", "Option C", "Option D"] : ["True", "False"],
-      correctAnswer: i % 2 === 0 ? "Option A" : "True",
-      explanation: "This is a mock explanation because the AI key is not configured.",
-      difficulty: (difficulty as unknown as QuizQuestion["difficulty"]) ?? "Medium",
-      topic,
-    }));
-    return mocks;
+  const prompt = `
+Generate ${count} quiz questions about "${topic}" with difficulty "${difficulty}" in ${language}.
+Return ONLY a valid JSON array (no markdown, no explanation text). Example structure:
+[
+  {
+    "type": "multiple_choice" | "true_false",
+    "question": "...",
+    "options": ["A", "B", "C", "D"],
+    "correctAnswer": "A",
+    "explanation": "...",
+    "difficulty": "${difficulty}",
+    "topic": "${topic}"
   }
-
-  const userPrompt = `Generate ${count} quiz questions about "${topic}" with "${difficulty}" difficulty in ${language}.
-Return ONLY a valid JSON array with NO markdown formatting or extra text. Each item must match:
-{
-  "type": "multiple_choice" | "true_false",
-  "question": "...",
-  "options": ["A", "B", "C", "D"],
-  "correctAnswer": "A",
-  "explanation": "...",
-  "difficulty": "${difficulty}",
-  "topic": "${topic}"
-}
+]
 Rules:
-- Mix types: multiple_choice (60%), true_false (40%).
-- For true_false use options ["True", "False"].
-- correctAnswer must exactly match one of options.
-- Return ONLY the JSON array.`;
+- Mix types: multiple_choice (60%), true_false (40%)
+- For true_false, options must be ["True","False"]
+- Keep JSON valid
+`;
 
-  try {
-    let text = await callAI([
-      { role: "system", content: "You generate JSON-only quiz data. Never include markdown fences." },
-      { role: "user", content: userPrompt },
-    ]);
-
-    text = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-    const questions = JSON.parse(text);
-
-    return (questions as any[]).map((q: any, index: number) => ({
-      ...q,
-      id: `${Date.now()}_${index}`,
-      type: (q?.type as QuizQuestion["type"]) ?? "multiple_choice",
-      difficulty: difficulty as QuizQuestion["difficulty"],
-      topic,
-    }));
-  } catch (error) {
-    console.error("Error generating questions:", error);
-    throw new Error("Failed to generate questions. Please try again.");
-  }
-}
-
-export interface GenerateSingleQuestionParams {
-  topic: string;
-  difficulty: string; // expected: easy|medium|hard|challenge
-  language?: string; // ISO language name or code
-}
-
-export type UserRequestedQuestion = {
-  type: "multipleChoice" | "trueFalse" | "fillBlank" | "mediaBased" | "riddle";
-  content: string;
-  options?: string[];
-  correctAnswer: string;
-  explanation: string;
-  difficulty: "easy" | "medium" | "hard" | "challenge";
-};
-
-export async function generateSingleQuestion(
-  params: GenerateSingleQuestionParams
-): Promise<UserRequestedQuestion> {
-  const { topic, difficulty, language = "English" } = params;
-
-  if (!hasOpenAIKey()) {
-    console.log("ℹ️ [Quiz Battle AI] OPENAI_API_KEY not set. Returning a mock single question.");
-    const isTF = Math.random() < 0.4;
-    const mock: UserRequestedQuestion = isTF
-      ? {
-          type: "trueFalse",
-          content: `${topic} is commonly associated with science. True or False?`,
-          correctAnswer: "True",
-          explanation: "Mock data: configure OPENAI_API_KEY to get real AI questions.",
-          difficulty: (difficulty as unknown as UserRequestedQuestion["difficulty"]) ?? "medium",
-        }
-      : {
-          type: "multipleChoice",
-          content: `Which of these best relates to ${topic}?`,
-          options: ["Option A", "Option B", "Option C", "Option D"],
-          correctAnswer: "Option A",
-          explanation: "Mock data: configure OPENAI_API_KEY to get real AI questions.",
-          difficulty: (difficulty as unknown as UserRequestedQuestion["difficulty"]) ?? "medium",
-        };
-    return mock;
-  }
-
-  const userPrompt = `Generate exactly one quiz question on the topic "${topic}" with difficulty "${difficulty}" in ${language}.
-Return ONLY a JSON object with this exact shape (no markdown, no commentary):
-{
-  "type": "multipleChoice | trueFalse | fillBlank | mediaBased | riddle",
-  "content": "...",
-  "options": ["A", "B", "C", "D"],
-  "correctAnswer": "B",
-  "explanation": "Short reason",
-  "difficulty": "${difficulty}"
-}
-Rules:
-- If type is trueFalse, options must be ["True", "False"].
-- If type is fillBlank or riddle, omit options.
-- Prefer multipleChoice unless the topic fits another type.
-- content max 200 chars. Ensure valid JSON.`;
-
-  try {
-    let text = await callAI([
-      { role: "system", content: "You return only strict JSON with double quotes." },
-      { role: "user", content: userPrompt },
-    ]);
-    text = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-    const parsed = JSON.parse(text) as UserRequestedQuestion;
-    return parsed;
-  } catch (error) {
-    console.error("Error generating single question:", error);
-    throw new Error("Failed to generate question");
-  }
+  const text = await callOpenAI(prompt);
+  const data = JSON.parse(text);
+  return (data as any[]).map((q: any, i: number) => ({
+    id: `${Date.now()}_${i}`,
+    ...q,
+  }));
 }
 
 export async function getAIExplanation(
@@ -216,19 +101,8 @@ export async function getAIExplanation(
   correctAnswer: string,
   language: string = "English"
 ): Promise<string> {
-  const userPrompt = `As an AI mentor, explain in ${language} why the answer to this question is "${correctAnswer}" and not "${userAnswer}". Be concise (2-3 sentences), encouraging, and specific.\n\nQuestion: ${question}`;
+  const prompt = `Explain in ${language} why the correct answer to the following question is "${correctAnswer}" and not "${userAnswer}". Be concise (2-3 sentences). Question: ${question}`;
 
-  try {
-    if (!hasOpenAIKey()) {
-      return "Great effort! The correct answer better matches the key facts in the question. Review the explanation and try a similar one to reinforce your understanding.";
-    }
-    const text = await callAI([
-      { role: "system", content: "You are a helpful, concise tutor." },
-      { role: "user", content: userPrompt },
-    ]);
-    return text.trim();
-  } catch (error) {
-    console.error("Error getting AI explanation:", error);
-    return "The correct answer differs from your selection. Keep practicing!";
-  }
+  const text = await callOpenAI(prompt);
+  return text;
 }

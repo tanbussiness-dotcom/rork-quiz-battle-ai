@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { db } from "@/lib/firebase";
-import { generateQuestions as generateWithAI, hasOpenAIKey } from "@/lib/gemini";
+
 import { trpcClient } from "@/lib/trpc";
 import { APP_CONFIG } from "@/lib/config";
 import type { Question, QuestionHistory, GenerateQuestionParams } from "@/models";
@@ -40,45 +40,8 @@ export async function generateAndStoreQuestions(
       results.push(q);
     } catch (e) {
       console.log("generateAndStoreQuestions: backend generation failed", e);
-      // Best-effort fallback: try client-side ONLY if an API key exists in env
-      try {
-        if (!hasOpenAIKey()) {
-          throw new Error("OpenAI key not configured on client; skipping fallback");
-        }
-        const aiFallback = await generateWithAI({
-          topic,
-          difficulty,
-          count: 1,
-          language,
-        });
-        const q = aiFallback[0];
-        if (q) {
-          const mapped: Question = {
-            id: q.id,
-            type: q.type,
-            content: q.question,
-            options: q.options,
-            correctAnswer: Array.isArray(q.correctAnswer)
-              ? (q.correctAnswer as string[])[0]
-              : (q.correctAnswer as string),
-            explanation: q.explanation,
-            difficulty: q.difficulty,
-            topic,
-            mediaUrl: undefined,
-            source: "ai",
-            createdByAI: true,
-            timeLimit: APP_CONFIG.questionTimeLimit,
-            createdAt: Date.now(),
-            language,
-          };
-          const docRef = await addDoc(collection(db, QUESTIONS_COLLECTION), mapped);
-          const saved = { ...mapped, id: docRef.id } as Question;
-          results.push(saved);
-          await cacheOfflineQuestion(saved);
-        }
-      } catch (err) {
-        console.log("generateAndStoreQuestions: fallback failed", err);
-      }
+      // No fallback: enforce real OpenAI via backend; surface error
+      throw e as Error;
     }
   }
 
