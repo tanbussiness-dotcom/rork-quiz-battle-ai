@@ -48,14 +48,31 @@ export const trpcClient = trpc.createClient({
       transformer: superjson,
       fetch: async (url, options) => {
         console.log("🔍 [tRPC] Fetching:", url);
+        console.log("🔍 [tRPC] Options:", JSON.stringify(options, null, 2));
         try {
           const response = await fetch(url, options);
           console.log("🔍 [tRPC] Response status:", response.status);
+          console.log("🔍 [tRPC] Response headers:", JSON.stringify([...response.headers.entries()]));
           
           if (!response.ok) {
             const text = await response.text();
-            console.error("❌ [tRPC] Error response:", text.substring(0, 200));
+            console.error("❌ [tRPC] Error response:", text.substring(0, 500));
+            
+            if (text.includes("<!DOCTYPE") || text.includes("<html")) {
+              console.error("❌ [tRPC] Received HTML instead of JSON. This means the API route is not found.");
+              console.error("❌ [tRPC] Make sure the development server is running and API routes are properly configured.");
+              console.error("❌ [tRPC] Expected URL:", trpcUrl);
+            }
+            
             throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+          }
+          
+          const contentType = response.headers.get("content-type");
+          if (contentType && !contentType.includes("application/json")) {
+            const text = await response.text();
+            console.error("❌ [tRPC] Expected JSON but got:", contentType);
+            console.error("❌ [tRPC] Response body:", text.substring(0, 500));
+            throw new Error(`Expected JSON but got ${contentType}`);
           }
           
           return response;

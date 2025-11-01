@@ -17,6 +17,13 @@ if (process.env.OPENAI_API_KEY) {
 
 app.use("*", cors());
 
+app.use("*", async (c, next) => {
+  console.log("🔍 [Backend] Incoming request:", c.req.method, c.req.url);
+  console.log("🔍 [Backend] Path:", c.req.path);
+  await next();
+  console.log("✅ [Backend] Response sent with status:", c.res.status);
+});
+
 app.onError((err, c) => {
   console.error("❌ [Backend] Unhandled error:", err);
   return c.json(
