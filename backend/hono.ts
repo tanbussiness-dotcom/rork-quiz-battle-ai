@@ -14,7 +14,7 @@ if (process.env.OPENAI_API_KEY) {
 app.use("*", cors());
 
 app.use(
-  "/trpc/*",
+  "/api/trpc/*",
   trpcServer({
     endpoint: "/api/trpc",
     router: appRouter,
