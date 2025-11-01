@@ -499,12 +499,20 @@ export default function BattleQuizScreen() {
             </View>
 
             <View style={styles.resultActions}>
-              <TouchableOpacity style={styles.resultButtonPrimary} onPress={() => router.back()}>
-                <Text style={styles.resultButtonPrimaryText}>Play Again</Text>
+              <TouchableOpacity 
+                style={styles.resultButtonPrimary} 
+                onPress={() => {
+                  router.replace({
+                    pathname: "/battle-results" as any,
+                    params: { isWinner: isWinner ? "true" : "false", roomId: roomId as string }
+                  });
+                }}
+              >
+                <Text style={styles.resultButtonPrimaryText}>View Results</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.resultButtonSecondary}
-                onPress={() => router.push("/(tabs)/battle")}
+                onPress={() => router.replace("/(tabs)/battle")}
               >
                 <Text style={styles.resultButtonSecondaryText}>Back to Lobby</Text>
               </TouchableOpacity>

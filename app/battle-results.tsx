@@ -451,10 +451,10 @@ export default function BattleResultsScreen() {
         <View style={styles.actionButtons}>
           <GlowButton
             gradient={[Colors.primary, "#14b8a6"] as const}
-            onPress={() => router.push("/battle-quiz?roomId=rematch")}
+            onPress={() => router.replace("/(tabs)/battle")}
           >
             <RotateCcw size={20} color="#000" />
-            <Text style={styles.glowButtonText}>Rematch</Text>
+            <Text style={styles.glowButtonText}>New Battle</Text>
           </GlowButton>
 
           <GlowButton
