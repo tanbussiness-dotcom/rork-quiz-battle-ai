@@ -26,41 +26,61 @@ export async function generateAndStoreQuestions(
 ): Promise<Question[]> {
   console.log("Generating questions with params:", params);
 
-  const aiQuestions = await generateWithAI({
-    topic: params.topic,
-    difficulty: params.difficulty,
-    count: params.count,
-    language: params.language,
-  });
+  const { topic, difficulty, count, language } = params;
 
-  const questions: Question[] = aiQuestions.map((q) => ({
-    id: q.id,
-    type: q.type,
-    content: q.question,
-    options: q.options,
-    correctAnswer: Array.isArray(q.correctAnswer) ? (q.correctAnswer as string[])[0] : (q.correctAnswer as string),
-    explanation: q.explanation,
-    difficulty: q.difficulty,
-    topic: params.topic,
-    mediaUrl: undefined,
-    source: "ai",
-    createdByAI: true,
-    timeLimit: 30,
-    createdAt: Date.now(),
-    language: params.language,
-  }));
+  const results: Question[] = [];
 
-  const savedQuestions: Question[] = [];
-
-  for (const question of questions) {
-    const docRef = await addDoc(collection(db, QUESTIONS_COLLECTION), question);
-    const saved = { ...question, id: docRef.id } as Question;
-    savedQuestions.push(saved);
-    await cacheOfflineQuestion(saved);
+  for (let i = 0; i < count; i++) {
+    try {
+      const q = await generateQuestionWithBackend(
+        topic,
+        (difficulty as "easy" | "medium" | "hard" | "challenge") ?? "medium",
+        language ?? "en"
+      );
+      results.push(q);
+    } catch (e) {
+      console.log("generateAndStoreQuestions: backend generation failed", e);
+      // Best-effort fallback: try client-side only if API key exists
+      try {
+        const aiFallback = await generateWithAI({
+          topic,
+          difficulty,
+          count: 1,
+          language,
+        });
+        const q = aiFallback[0];
+        if (q) {
+          const mapped: Question = {
+            id: q.id,
+            type: q.type,
+            content: q.question,
+            options: q.options,
+            correctAnswer: Array.isArray(q.correctAnswer)
+              ? (q.correctAnswer as string[])[0]
+              : (q.correctAnswer as string),
+            explanation: q.explanation,
+            difficulty: q.difficulty,
+            topic,
+            mediaUrl: undefined,
+            source: "ai",
+            createdByAI: true,
+            timeLimit: APP_CONFIG.questionTimeLimit,
+            createdAt: Date.now(),
+            language,
+          };
+          const docRef = await addDoc(collection(db, QUESTIONS_COLLECTION), mapped);
+          const saved = { ...mapped, id: docRef.id } as Question;
+          results.push(saved);
+          await cacheOfflineQuestion(saved);
+        }
+      } catch (err) {
+        console.log("generateAndStoreQuestions: fallback failed", err);
+      }
+    }
   }
 
-  console.log(`Saved ${savedQuestions.length} questions to Firestore`);
-  return savedQuestions;
+  console.log(`Generated ${results.length} questions`);
+  return results;
 }
 
 export async function generateQuestionWithBackend(
