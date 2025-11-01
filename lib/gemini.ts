@@ -1,7 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { GEMINI_CONFIG } from "./config";
-
-const genAI = new GoogleGenerativeAI(GEMINI_CONFIG.apiKey);
+import { APP_CONFIG } from "./config";
 
 export interface QuizQuestion {
   id: string;
@@ -21,50 +18,72 @@ export interface GenerateQuestionsParams {
   language?: string;
 }
 
+async function callOpenAI(messages: { role: "system" | "user" | "assistant"; content: string }[]) {
+  const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing OpenAI API key. Set EXPO_PUBLIC_OPENAI_API_KEY");
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages,
+      temperature: 0.7,
+      max_tokens: 1200,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.log("OpenAI error", res.status, text);
+    throw new Error("OpenAI request failed");
+  }
+
+  const json = (await res.json()) as any;
+  const content: string = json?.choices?.[0]?.message?.content ?? "";
+  return content;
+}
+
 export async function generateQuestions(
   params: GenerateQuestionsParams
 ): Promise<QuizQuestion[]> {
   const { topic, difficulty, count, language = "English" } = params;
 
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-  const prompt = `Generate ${count} quiz questions about "${topic}" with "${difficulty}" difficulty in ${language}.
-
-Return ONLY a valid JSON array with NO markdown formatting, explanations, or additional text. Each question must follow this exact structure:
-
-[
-  {
-    "type": "multiple_choice",
-    "question": "question text here",
-    "options": ["option1", "option2", "option3", "option4"],
-    "correctAnswer": "option1",
-    "explanation": "detailed explanation here",
-    "difficulty": "${difficulty}",
-    "topic": "${topic}"
-  }
-]
-
-Requirements:
-1. Mix question types: multiple_choice (60%), true_false (40%)
-2. For true_false, use options ["True", "False"]
-3. correctAnswer must exactly match one of the options
-4. Make questions engaging and educational
-5. Ensure proper ${language} grammar
-6. Return ONLY the JSON array, no other text`;
+  const userPrompt = `Generate ${count} quiz questions about "${topic}" with "${difficulty}" difficulty in ${language}.
+Return ONLY a valid JSON array with NO markdown formatting or extra text. Each item must match:
+{
+  "type": "multiple_choice" | "true_false",
+  "question": "...",
+  "options": ["A", "B", "C", "D"],
+  "correctAnswer": "A",
+  "explanation": "...",
+  "difficulty": "${difficulty}",
+  "topic": "${topic}"
+}
+Rules:
+- Mix types: multiple_choice (60%), true_false (40%).
+- For true_false use options ["True", "False"].
+- correctAnswer must exactly match one of options.
+- Return ONLY the JSON array.`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let text = response.text();
+    let text = await callOpenAI([
+      { role: "system", content: "You generate JSON-only quiz data. Never include markdown fences." },
+      { role: "user", content: userPrompt },
+    ]);
 
     text = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-
     const questions = JSON.parse(text);
 
-    return questions.map((q: any, index: number) => ({
+    return (questions as any[]).map((q: any, index: number) => ({
       ...q,
       id: `${Date.now()}_${index}`,
-      type: q.type || "multiple_choice",
+      type: (q?.type as QuizQuestion["type"]) ?? "multiple_choice",
       difficulty: difficulty as QuizQuestion["difficulty"],
       topic,
     }));
@@ -93,30 +112,29 @@ export async function generateSingleQuestion(
   params: GenerateSingleQuestionParams
 ): Promise<UserRequestedQuestion> {
   const { topic, difficulty, language = "English" } = params;
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-  const prompt = `Generate exactly one quiz question on the topic "${topic}" with difficulty "${difficulty}" in ${language}.
-Return ONLY a JSON object with this exact shape and field names (no markdown, no backticks, no commentary):
+  const userPrompt = `Generate exactly one quiz question on the topic "${topic}" with difficulty "${difficulty}" in ${language}.
+Return ONLY a JSON object with this exact shape (no markdown, no commentary):
 {
   "type": "multipleChoice | trueFalse | fillBlank | mediaBased | riddle",
   "content": "...",
   "options": ["A", "B", "C", "D"],
   "correctAnswer": "B",
-  "explanation": "Gemini provides reasoning why",
+  "explanation": "Short reason",
   "difficulty": "${difficulty}"
 }
 Rules:
-- If type is trueFalse, options must be ["True", "False"] and correctAnswer must be one of them.
-- If type is fillBlank or riddle, omit options field.
-- Prefer multipleChoice unless the topic naturally fits another type.
-- content must be concise (max 200 chars) and unambiguous.
-- Ensure the response is valid JSON with double quotes and no trailing commas.`;
+- If type is trueFalse, options must be ["True", "False"].
+- If type is fillBlank or riddle, omit options.
+- Prefer multipleChoice unless the topic fits another type.
+- content max 200 chars. Ensure valid JSON.`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let text = response.text().trim();
-    text = text.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+    let text = await callOpenAI([
+      { role: "system", content: "You return only strict JSON with double quotes." },
+      { role: "user", content: userPrompt },
+    ]);
+    text = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
     const parsed = JSON.parse(text) as UserRequestedQuestion;
     return parsed;
   } catch (error) {
@@ -131,22 +149,16 @@ export async function getAIExplanation(
   correctAnswer: string,
   language: string = "English"
 ): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-  const prompt = `As an AI mentor, explain in ${language} why the answer to this question is "${correctAnswer}" and not "${userAnswer}".
-
-Question: ${question}
-User's answer: ${userAnswer}
-Correct answer: ${correctAnswer}
-
-Provide a brief, encouraging explanation (2-3 sentences).`;
+  const userPrompt = `As an AI mentor, explain in ${language} why the answer to this question is "${correctAnswer}" and not "${userAnswer}". Be concise (2-3 sentences), encouraging, and specific.\n\nQuestion: ${question}`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
+    const text = await callOpenAI([
+      { role: "system", content: "You are a helpful, concise tutor." },
+      { role: "user", content: userPrompt },
+    ]);
+    return text.trim();
   } catch (error) {
     console.error("Error getting AI explanation:", error);
-    return "The correct answer is different from your selection. Keep practicing!";
+    return "The correct answer differs from your selection. Keep practicing!";
   }
 }
