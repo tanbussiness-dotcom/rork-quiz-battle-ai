@@ -26,7 +26,7 @@ export async function generateQuestions(
 ): Promise<QuizQuestion[]> {
   const { topic, difficulty, count, language = "English" } = params;
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   const prompt = `Generate ${count} quiz questions about "${topic}" with "${difficulty}" difficulty in ${language}.
 
@@ -93,7 +93,7 @@ export async function generateSingleQuestion(
   params: GenerateSingleQuestionParams
 ): Promise<UserRequestedQuestion> {
   const { topic, difficulty, language = "English" } = params;
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   const prompt = `Generate exactly one quiz question on the topic "${topic}" with difficulty "${difficulty}" in ${language}.
 Return ONLY a JSON object with this exact shape and field names (no markdown, no backticks, no commentary):
@@ -131,7 +131,7 @@ export async function getAIExplanation(
   correctAnswer: string,
   language: string = "English"
 ): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   const prompt = `As an AI mentor, explain in ${language} why the answer to this question is "${correctAnswer}" and not "${userAnswer}".
 
