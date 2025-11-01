@@ -1,5 +1,9 @@
 import { generateText } from "@rork/toolkit-sdk";
 
+console.log("🔍 [Quiz Battle AI] Checking OpenAI key availability...");
+console.log("🔍 [Quiz Battle AI] OPENAI_API_KEY exists:", !!process.env.OPENAI_API_KEY);
+console.log("🔍 [Quiz Battle AI] Key length:", process.env.OPENAI_API_KEY?.length || 0);
+
 export interface QuizQuestion {
   id: string;
   type: "multiple_choice" | "true_false" | "multiple_select" | "fill_blank";
@@ -19,7 +23,9 @@ export interface GenerateQuestionsParams {
 }
 
 export function hasOpenAIKey(): boolean {
-  return true;
+  const hasKey = !!process.env.OPENAI_API_KEY;
+  console.log("🔍 [Quiz Battle AI] hasOpenAIKey called:", hasKey);
+  return hasKey;
 }
 
 type MessageRole = "user" | "assistant";
