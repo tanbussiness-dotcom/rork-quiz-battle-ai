@@ -16,7 +16,9 @@ function getBaseUrl(): string {
   if (Platform.OS === "web") {
     console.log("✅ [tRPC] Web platform detected. Using window.location.origin for API path.");
     if (typeof window !== "undefined") {
-      return window.location.origin;
+      const origin = window.location.origin;
+      console.log("✅ [tRPC] Window origin:", origin);
+      return origin;
     }
     return "";
   }
@@ -33,9 +35,11 @@ function getBaseUrl(): string {
 }
 
 const baseUrl = getBaseUrl();
-const trpcUrl = baseUrl ? `${baseUrl}/api/trpc` : "/api/trpc";
+const trpcUrl = `${baseUrl}/api/trpc`;
+console.log("🔗 [tRPC] Base URL:", baseUrl);
+console.log("🔗 [tRPC] Full tRPC endpoint:", trpcUrl);
 
-console.log("🔗 [tRPC] Final tRPC endpoint:", trpcUrl);
+
 
 export const trpcClient = trpc.createClient({
   links: [
