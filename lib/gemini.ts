@@ -1,6 +1,4 @@
 
-import { generateText } from "@rork/toolkit-sdk";
-
 console.log("🔍 [Quiz Battle AI] Checking OpenAI key...");
 const hasKey = !!process.env.OPENAI_API_KEY;
 console.log("🔍 [Quiz Battle AI] OPENAI_API_KEY exists:", hasKey);
@@ -42,11 +40,7 @@ async function callOpenAI(prompt: string): Promise<string> {
     body: JSON.stringify({
       model: "gpt-4o-mini",
       messages: [
-        {
-          role: "system",
-          content:
-            "You are an expert quiz generator. You return only valid JSON without markdown or extra text.",
-        },
+        { role: "system", content: "You are an expert quiz generator and explainer. Return only requested format." },
         { role: "user", content: prompt },
       ],
       temperature: 0.8,
@@ -95,6 +89,22 @@ Rules:
   }));
 }
 
+export type SingleAIQuestion = {
+  type: "multipleChoice" | "trueFalse" | "fillBlank" | "mediaBased" | "riddle";
+  content: string;
+  options?: string[];
+  correctAnswer: string;
+  explanation: string;
+};
+
+export async function generateSingleQuestion(params: { topic: string; difficulty: string; language?: string; }): Promise<SingleAIQuestion> {
+  const { topic, difficulty, language = "English" } = params;
+  const prompt = `Generate exactly 1 quiz question about "${topic}" with difficulty "${difficulty}" in ${language}. Return ONLY valid JSON object with keys: type (one of multipleChoice,trueFalse,fillBlank,mediaBased,riddle), content, options (array for multipleChoice or [\"True\",\"False\"] for trueFalse), correctAnswer (string), explanation (string).`;
+  const text = await callOpenAI(prompt);
+  const obj = JSON.parse(text);
+  return obj as SingleAIQuestion;
+}
+
 export async function getAIExplanation(
   question: string,
   userAnswer: string,
@@ -102,7 +112,6 @@ export async function getAIExplanation(
   language: string = "English"
 ): Promise<string> {
   const prompt = `Explain in ${language} why the correct answer to the following question is "${correctAnswer}" and not "${userAnswer}". Be concise (2-3 sentences). Question: ${question}`;
-
   const text = await callOpenAI(prompt);
   return text;
 }
