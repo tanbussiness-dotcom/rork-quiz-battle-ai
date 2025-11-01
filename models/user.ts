@@ -14,6 +14,7 @@ export interface User {
   stats: UserStats;
   createdAt: number;
   updatedAt: number;
+  onboardingComplete?: boolean;
 }
 
 export type RankTier = 
@@ -30,6 +31,7 @@ export interface UserPreferences {
   notificationsEnabled: boolean;
   soundEnabled: boolean;
   hapticsEnabled: boolean;
+  favoriteTopics?: string[];
 }
 
 

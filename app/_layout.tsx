@@ -22,11 +22,27 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0] === "(tabs)";
 
-    if (!user && inAuthGroup) {
-      router.replace("/welcome");
-    } else if (user && !inAuthGroup) {
-      router.replace("/home");
+    async function decideRoute() {
+      if (!user && inAuthGroup) {
+        router.replace("/welcome");
+        return;
+      }
+      if (user && !inAuthGroup) {
+        try {
+          const { getUserProfile } = await import("@/services/user.service");
+          const profile = await getUserProfile(user.uid);
+          if (profile?.onboardingComplete) {
+            router.replace("/home");
+          } else {
+            router.replace("/profile-setup");
+          }
+        } catch (e) {
+          router.replace("/home");
+        }
+      }
     }
+
+    void decideRoute();
   }, [user, loading, segments]);
 
   return (
@@ -34,6 +50,7 @@ function RootLayoutNav() {
       <Stack.Screen name="welcome" />
       <Stack.Screen name="login" />
       <Stack.Screen name="register" />
+      <Stack.Screen name="profile-setup" />
       <Stack.Screen name="(tabs)" />
     </Stack>
   );

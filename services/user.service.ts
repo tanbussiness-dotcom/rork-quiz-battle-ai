@@ -32,6 +32,7 @@ export async function createUserProfile(
       notificationsEnabled: true,
       soundEnabled: true,
       hapticsEnabled: true,
+      favoriteTopics: [],
     },
     stats: {
       totalGamesPlayed: 0,
@@ -46,6 +47,7 @@ export async function createUserProfile(
     },
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    onboardingComplete: false,
   };
 
   if (typeof data.photoURL === 'string') {
@@ -83,10 +85,11 @@ export async function updateUserPreferences(
   preferences: Partial<UserPreferences>
 ): Promise<void> {
   const docRef = doc(db, USERS_COLLECTION, uid);
-  await updateDoc(docRef, {
-    preferences,
-    updatedAt: Date.now(),
+  const updates: Record<string, any> = { updatedAt: Date.now() };
+  Object.entries(preferences).forEach(([key, value]) => {
+    updates[`preferences.${key}`] = value;
   });
+  await updateDoc(docRef, updates);
 }
 
 export async function addXP(uid: string, amount: number): Promise<void> {
