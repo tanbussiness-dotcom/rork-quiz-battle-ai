@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { db } from "@/lib/firebase";
-import { generateQuestions as generateWithAI } from "@/lib/gemini";
+import { generateQuestions as generateWithAI, hasOpenAIKey } from "@/lib/gemini";
 import { trpcClient } from "@/lib/trpc";
 import { APP_CONFIG } from "@/lib/config";
 import type { Question, QuestionHistory, GenerateQuestionParams } from "@/models";
@@ -40,8 +40,11 @@ export async function generateAndStoreQuestions(
       results.push(q);
     } catch (e) {
       console.log("generateAndStoreQuestions: backend generation failed", e);
-      // Best-effort fallback: try client-side only if API key exists
+      // Best-effort fallback: try client-side ONLY if an API key exists in env
       try {
+        if (!hasOpenAIKey()) {
+          throw new Error("OpenAI key not configured on client; skipping fallback");
+        }
         const aiFallback = await generateWithAI({
           topic,
           difficulty,

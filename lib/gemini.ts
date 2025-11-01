@@ -18,10 +18,15 @@ export interface GenerateQuestionsParams {
   language?: string;
 }
 
+export function hasOpenAIKey(): boolean {
+  const k = process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
+  return typeof k === "string" && k.length > 0;
+}
+
 async function callOpenAI(messages: { role: "system" | "user" | "assistant"; content: string }[]) {
   const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("Missing OpenAI API key. Set EXPO_PUBLIC_OPENAI_API_KEY");
+    throw new Error("Missing OpenAI API key. Set EXPO_PUBLIC_OPENAI_API_KEY or OPENAI_API_KEY on the server");
   }
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
