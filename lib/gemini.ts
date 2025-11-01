@@ -81,6 +81,24 @@ export async function generateQuestions(
 ): Promise<QuizQuestion[]> {
   const { topic, difficulty, count, language = "English" } = params;
 
+  if (!hasOpenAIKey()) {
+    console.log("ℹ️ [Quiz Battle AI] OPENAI_API_KEY not set. Returning mock questions.");
+    const mocks: QuizQuestion[] = Array.from({ length: count }).map((_, i) => ({
+      id: `${Date.now()}_${i}`,
+      type: i % 2 === 0 ? "multiple_choice" : "true_false",
+      question:
+        i % 2 === 0
+          ? `Sample question ${i + 1} about ${topic}?`
+          : `"${topic}" is related to technology. True or False?`,
+      options: i % 2 === 0 ? ["Option A", "Option B", "Option C", "Option D"] : ["True", "False"],
+      correctAnswer: i % 2 === 0 ? "Option A" : "True",
+      explanation: "This is a mock explanation because the AI key is not configured.",
+      difficulty: (difficulty as unknown as QuizQuestion["difficulty"]) ?? "Medium",
+      topic,
+    }));
+    return mocks;
+  }
+
   const userPrompt = `Generate ${count} quiz questions about "${topic}" with "${difficulty}" difficulty in ${language}.
 Return ONLY a valid JSON array with NO markdown formatting or extra text. Each item must match:
 {
@@ -140,6 +158,28 @@ export async function generateSingleQuestion(
 ): Promise<UserRequestedQuestion> {
   const { topic, difficulty, language = "English" } = params;
 
+  if (!hasOpenAIKey()) {
+    console.log("ℹ️ [Quiz Battle AI] OPENAI_API_KEY not set. Returning a mock single question.");
+    const isTF = Math.random() < 0.4;
+    const mock: UserRequestedQuestion = isTF
+      ? {
+          type: "trueFalse",
+          content: `${topic} is commonly associated with science. True or False?`,
+          correctAnswer: "True",
+          explanation: "Mock data: configure OPENAI_API_KEY to get real AI questions.",
+          difficulty: (difficulty as unknown as UserRequestedQuestion["difficulty"]) ?? "medium",
+        }
+      : {
+          type: "multipleChoice",
+          content: `Which of these best relates to ${topic}?`,
+          options: ["Option A", "Option B", "Option C", "Option D"],
+          correctAnswer: "Option A",
+          explanation: "Mock data: configure OPENAI_API_KEY to get real AI questions.",
+          difficulty: (difficulty as unknown as UserRequestedQuestion["difficulty"]) ?? "medium",
+        };
+    return mock;
+  }
+
   const userPrompt = `Generate exactly one quiz question on the topic "${topic}" with difficulty "${difficulty}" in ${language}.
 Return ONLY a JSON object with this exact shape (no markdown, no commentary):
 {
@@ -179,6 +219,9 @@ export async function getAIExplanation(
   const userPrompt = `As an AI mentor, explain in ${language} why the answer to this question is "${correctAnswer}" and not "${userAnswer}". Be concise (2-3 sentences), encouraging, and specific.\n\nQuestion: ${question}`;
 
   try {
+    if (!hasOpenAIKey()) {
+      return "Great effort! The correct answer better matches the key facts in the question. Review the explanation and try a similar one to reinforce your understanding.";
+    }
     const text = await callAI([
       { role: "system", content: "You are a helpful, concise tutor." },
       { role: "user", content: userPrompt },
