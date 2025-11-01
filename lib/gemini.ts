@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config";
+import { generateText } from "@rork/toolkit-sdk";
 
 export interface QuizQuestion {
   id: string;
@@ -19,39 +19,37 @@ export interface GenerateQuestionsParams {
 }
 
 export function hasOpenAIKey(): boolean {
-  const k = process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
-  return typeof k === "string" && k.length > 0;
+  return true;
 }
 
-async function callOpenAI(messages: { role: "system" | "user" | "assistant"; content: string }[]) {
-  const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing OpenAI API key. Set EXPO_PUBLIC_OPENAI_API_KEY or OPENAI_API_KEY on the server");
+type MessageRole = "user" | "assistant";
+type MessageContent = string | { type: "text"; text: string }[];
+
+interface Message {
+  role: MessageRole;
+  content: MessageContent;
+}
+
+async function callAI(messages: { role: "system" | "user" | "assistant"; content: string }[]) {
+  try {
+    const formattedMessages: Message[] = messages
+      .filter((m) => m.role !== "system")
+      .map((m) => ({
+        role: m.role as MessageRole,
+        content: m.content,
+      }));
+
+    const systemMessage = messages.find((m) => m.role === "system");
+    const prompt = systemMessage
+      ? `${systemMessage.content}\n\n${formattedMessages[formattedMessages.length - 1].content}`
+      : formattedMessages[formattedMessages.length - 1].content as string;
+
+    const text = await generateText(prompt);
+    return text;
+  } catch (error) {
+    console.error("AI request error:", error);
+    throw new Error("AI request failed");
   }
-
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages,
-      temperature: 0.7,
-      max_tokens: 1200,
-    }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    console.log("OpenAI error", res.status, text);
-    throw new Error("OpenAI request failed");
-  }
-
-  const json = (await res.json()) as any;
-  const content: string = json?.choices?.[0]?.message?.content ?? "";
-  return content;
 }
 
 export async function generateQuestions(
@@ -77,7 +75,7 @@ Rules:
 - Return ONLY the JSON array.`;
 
   try {
-    let text = await callOpenAI([
+    let text = await callAI([
       { role: "system", content: "You generate JSON-only quiz data. Never include markdown fences." },
       { role: "user", content: userPrompt },
     ]);
@@ -135,7 +133,7 @@ Rules:
 - content max 200 chars. Ensure valid JSON.`;
 
   try {
-    let text = await callOpenAI([
+    let text = await callAI([
       { role: "system", content: "You return only strict JSON with double quotes." },
       { role: "user", content: userPrompt },
     ]);
@@ -157,7 +155,7 @@ export async function getAIExplanation(
   const userPrompt = `As an AI mentor, explain in ${language} why the answer to this question is "${correctAnswer}" and not "${userAnswer}". Be concise (2-3 sentences), encouraging, and specific.\n\nQuestion: ${question}`;
 
   try {
-    const text = await callOpenAI([
+    const text = await callAI([
       { role: "system", content: "You are a helpful, concise tutor." },
       { role: "user", content: userPrompt },
     ]);
