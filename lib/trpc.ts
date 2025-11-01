@@ -14,7 +14,10 @@ function getBaseUrl(): string {
   console.log("🔍 [tRPC] EXPO_PUBLIC_RORK_API_BASE_URL:", envUrl || "(not set)");
 
   if (Platform.OS === "web") {
-    console.log("✅ [tRPC] Web platform detected. Using relative API path to avoid CORS issues.");
+    console.log("✅ [tRPC] Web platform detected. Using window.location.origin for API path.");
+    if (typeof window !== "undefined") {
+      return window.location.origin;
+    }
     return "";
   }
 
@@ -24,7 +27,7 @@ function getBaseUrl(): string {
   }
 
   console.warn(
-    "⚠️ [tRPC] No base URL configured for native. Please set EXPO_PUBLIC_RORK_API_BASE_URL in environment variables. Falling back to relative."
+    "⚠️ [tRPC] No base URL configured for native. Please set EXPO_PUBLIC_RORK_API_BASE_URL in environment variables."
   );
   return "";
 }
@@ -39,6 +42,24 @@ export const trpcClient = trpc.createClient({
     httpLink({
       url: trpcUrl,
       transformer: superjson,
+      fetch: async (url, options) => {
+        console.log("🔍 [tRPC] Fetching:", url);
+        try {
+          const response = await fetch(url, options);
+          console.log("🔍 [tRPC] Response status:", response.status);
+          
+          if (!response.ok) {
+            const text = await response.text();
+            console.error("❌ [tRPC] Error response:", text.substring(0, 200));
+            throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+          }
+          
+          return response;
+        } catch (error) {
+          console.error("❌ [tRPC] Fetch error:", error);
+          throw error;
+        }
+      },
     }),
   ],
 });
