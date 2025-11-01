@@ -10,7 +10,7 @@ export const FIREBASE_CONFIG = {
 };
 
 export const GEMINI_CONFIG = {
-  apiKey: process.env.EXPO_PUBLIC_GEMINI_API_KEY || "AIzaSyA3wlaGOPczH0FROCH_wcsiXr5R8gmHPTg",
+  apiKey: process.env.EXPO_PUBLIC_GEMINI_API_KEY || "AIzaSyDE44vOVwH0-wN6i-hauqO1JqE879LYKOQ",
 };
 
 export const APP_CONFIG = {
