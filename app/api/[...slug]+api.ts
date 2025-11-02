@@ -1,7 +1,11 @@
 import app from "@/backend/hono";
 
 console.log("🚀 [API Route] Loaded: app/api/[...slug]+api.ts");
-console.log("🚀 [API Route] This file is being executed!");
+console.log("🚀 [API Route] Environment:", {
+  NODE_ENV: process.env.NODE_ENV,
+  hasOpenAI: !!process.env.OPENAI_API_KEY,
+});
+console.log("✅ [API Route] Hono app loaded successfully");
 
 async function handleApiRequest(request: Request): Promise<Response> {
   console.log("📥 [API] Request:", request.method, request.url);
@@ -33,7 +37,11 @@ async function handleApiRequest(request: Request): Promise<Response> {
     console.error("❌ [API] Error:", error.message);
     console.error("❌ [API] Error stack:", error.stack);
     return new Response(
-      JSON.stringify({ error: error.message, stack: error.stack }),
+      JSON.stringify({ 
+        error: error.message, 
+        stack: error.stack,
+        note: "If you see this error repeatedly, API routes might not be working in dev mode."
+      }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }

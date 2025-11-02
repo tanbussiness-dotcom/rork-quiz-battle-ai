@@ -21,9 +21,9 @@ function getBaseUrl(): string {
         return envUrl;
       }
       
-      const backendUrl = "/api";
-      console.log("⚠️ [tRPC] Using relative API route (may not work in dev):", backendUrl);
-      console.log("⚠️ [tRPC] If you see HTML errors, set EXPO_PUBLIC_RORK_API_BASE_URL to your backend URL");
+      const origin = window.location.origin;
+      const backendUrl = `${origin}/api`;
+      console.log("✅ [tRPC] Using window.location.origin for API:", backendUrl);
       return backendUrl;
     }
     return "";
@@ -47,10 +47,27 @@ console.log("🔗 [tRPC] Full tRPC endpoint:", trpcUrl);
 
 if (typeof window !== "undefined" && Platform.OS === "web") {
   console.log("🔗 [tRPC] Testing backend availability...");
+  console.log("🔗 [tRPC] Test URL:", `${baseUrl}/`);
+  
   fetch(`${baseUrl}/`)
-    .then(res => res.json())
-    .then(data => console.log("✅ [tRPC] Backend health check:", data))
-    .catch(err => console.error("❌ [tRPC] Backend not reachable:", err.message));
+    .then(async res => {
+      if (!res.ok) {
+        console.error("❌ [tRPC] Backend returned error status:", res.status);
+        const text = await res.text();
+        console.error("❌ [tRPC] Response:", text.substring(0, 200));
+        return;
+      }
+      const data = await res.json();
+      console.log("✅ [tRPC] Backend health check SUCCESS:", data);
+    })
+    .catch(err => {
+      console.error("❌ [tRPC] Backend not reachable:", err.message);
+      console.error("🚨 [tRPC] This means API routes are not working in web dev mode.");
+      console.error("🚨 [tRPC] Solutions:");
+      console.error("   1. Run backend server with: bun server.ts");
+      console.error("   2. Set EXPO_PUBLIC_RORK_API_BASE_URL in your env file");
+      console.error("   3. Or navigate to /debug-backend to run diagnostics");
+    });
 }
 
 
@@ -62,19 +79,21 @@ export const trpcClient = trpc.createClient({
       transformer: superjson,
       fetch: async (url, options) => {
         console.log("🔍 [tRPC] Fetching:", url);
-        console.log("🔍 [tRPC] Options:", JSON.stringify(options, null, 2));
         try {
           const response = await fetch(url, options);
           console.log("🔍 [tRPC] Response status:", response.status);
-          console.log("🔍 [tRPC] Response headers:", JSON.stringify([...response.headers.entries()]));
+          console.log("🔍 [tRPC] Response content-type:", response.headers.get("content-type"));
           
           if (!response.ok) {
             const text = await response.text();
             console.error("❌ [tRPC] Error response:", text.substring(0, 500));
             
             if (text.includes("<!DOCTYPE") || text.includes("<html")) {
-              console.error("❌ [tRPC] Received HTML instead of JSON. This means the API route is not found.");
-              console.error("❌ [tRPC] Make sure the development server is running and API routes are properly configured.");
+              console.error("❌ [tRPC] Received HTML instead of JSON.");
+              console.error("❌ [tRPC] This usually means:");
+              console.error("   1. API routes are not working in Expo web dev mode");
+              console.error("   2. OR the backend server is not running");
+              console.error("❌ [tRPC] Solution: Set EXPO_PUBLIC_RORK_API_BASE_URL in your env file");
               console.error("❌ [tRPC] Expected URL:", trpcUrl);
             }
             
@@ -90,7 +109,18 @@ export const trpcClient = trpc.createClient({
           }
           
           return response;
-        } catch (error) {
+        } catch (error: any) {
+          if (error.message === "Failed to fetch") {
+            console.error("❌ [tRPC] Network error - Failed to fetch");
+            console.error("❌ [tRPC] This usually means:");
+            console.error("   1. API routes don't work in Expo web dev mode");
+            console.error("   2. The backend server is not accessible");
+            console.error("   3. CORS issues");
+            console.error("❌ [tRPC] Try checking:");
+            console.error("   - Is your backend server running?");
+            console.error("   - Is EXPO_PUBLIC_RORK_API_BASE_URL set correctly?");
+            console.error("   - Check browser console for more details");
+          }
           console.error("❌ [tRPC] Fetch error:", error);
           throw error;
         }
