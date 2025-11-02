@@ -40,6 +40,14 @@ console.log("🔗 [tRPC] Base URL:", baseUrl);
 console.log("🔗 [tRPC] Full tRPC endpoint:", trpcUrl);
 console.log("🔗 [tRPC] Note: Expo API route at /api/[...path] strips /api prefix, so Hono sees /trpc");
 
+if (typeof window !== "undefined" && Platform.OS === "web") {
+  console.log("🔗 [tRPC] Testing backend availability...");
+  fetch(`${baseUrl}/api/`)
+    .then(res => res.json())
+    .then(data => console.log("✅ [tRPC] Backend health check:", data))
+    .catch(err => console.error("❌ [tRPC] Backend not reachable:", err.message));
+}
+
 
 
 export const trpcClient = trpc.createClient({
