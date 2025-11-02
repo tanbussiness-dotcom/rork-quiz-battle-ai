@@ -1,153 +1,92 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { Stack } from "expo-router";
-
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { trpc } from "@/lib/trpc";
 
 export default function DebugAPIScreen() {
-  const insets = useSafeAreaInsets();
   const [testResult, setTestResult] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
-  const testDirectFetch = async () => {
+  const testFetch = async () => {
     setLoading(true);
-    setTestResult("Testing direct fetch...\n");
-    
+    setTestResult("Testing fetch...");
     try {
       const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-      const testUrl = `${baseUrl}/api`;
-      
-      setTestResult(prev => prev + `\nFetching: ${testUrl}\n`);
-      
-      const response = await fetch(testUrl);
-      const status = response.status;
-      const contentType = response.headers.get("content-type");
-      
-      setTestResult(prev => prev + `\nStatus: ${status}\n`);
-      setTestResult(prev => prev + `Content-Type: ${contentType}\n`);
-      
-      const text = await response.text();
-      setTestResult(prev => prev + `\nResponse:\n${text.substring(0, 500)}\n`);
-      
-      if (contentType?.includes("application/json")) {
-        const json = JSON.parse(text);
-        setTestResult(prev => prev + `\nParsed JSON:\n${JSON.stringify(json, null, 2)}\n`);
-      }
-    } catch (error: any) {
-      setTestResult(prev => prev + `\n❌ Error: ${error.message}\n${error.stack}\n`);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const apiUrl = `${baseUrl}/api`;
+      const trpcUrl = `${baseUrl}/api/trpc`;
 
-  const testTRPC = async () => {
-    setLoading(true);
-    setTestResult("Testing tRPC...\n");
-    
-    try {
-      const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-      const trpcUrl = `${baseUrl}/api/trpc/example.hi`;
-      
-      setTestResult(prev => prev + `\nFetching: ${trpcUrl}\n`);
-      
-      const response = await fetch(trpcUrl, {
-        method: "GET",
-      });
-      
-      const status = response.status;
-      const contentType = response.headers.get("content-type");
-      
-      setTestResult(prev => prev + `\nStatus: ${status}\n`);
-      setTestResult(prev => prev + `Content-Type: ${contentType}\n`);
-      
-      const text = await response.text();
-      setTestResult(prev => prev + `\nResponse:\n${text}\n`);
-    } catch (error: any) {
-      setTestResult(prev => prev + `\n❌ Error: ${error.message}\n`);
-    } finally {
-      setLoading(false);
-    }
-  };
+      setTestResult(`Base URL: ${baseUrl}\nAPI URL: ${apiUrl}\nTRPC URL: ${trpcUrl}\n\nTesting /api...`);
 
-  const testTRPCClient = async () => {
-    setLoading(true);
-    setTestResult("Testing tRPC questions.generate endpoint...\n");
-    
-    try {
-      const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-      const trpcUrl = `${baseUrl}/api/trpc/questions.generate`;
-      
-      setTestResult(prev => prev + `\nPOST to: ${trpcUrl}\n`);
-      
-      const body = JSON.stringify({
-        topic: "Test",
-        difficulty: "easy",
-        language: "en"
-      });
-      
-      setTestResult(prev => prev + `Body: ${body}\n`);
-      
-      const response = await fetch(trpcUrl, {
+      const apiResponse = await fetch(apiUrl);
+      const apiText = await apiResponse.text();
+      const apiJson = JSON.parse(apiText);
+
+      setTestResult(prev => prev + `\n✅ /api works: ${JSON.stringify(apiJson, null, 2)}`);
+
+      setTestResult(prev => prev + `\n\nTesting /api/trpc/questions.generate...`);
+
+      const trpcResponse = await fetch(`${trpcUrl}/questions.generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body,
+        body: JSON.stringify({
+          topic: "Science",
+          difficulty: "easy",
+          language: "en",
+        }),
       });
-      
-      const status = response.status;
-      const contentType = response.headers.get("content-type");
-      
-      setTestResult(prev => prev + `\nStatus: ${status}\n`);
-      setTestResult(prev => prev + `Content-Type: ${contentType}\n`);
-      
-      const text = await response.text();
-      setTestResult(prev => prev + `\nResponse:\n${text.substring(0, 1000)}\n`);
-      
-      if (contentType?.includes("application/json")) {
-        const json = JSON.parse(text);
-        setTestResult(prev => prev + `\nParsed JSON:\n${JSON.stringify(json, null, 2)}\n`);
-      }
+
+      const trpcText = await trpcResponse.text();
+      setTestResult(prev => prev + `\n\nTRPC Response Status: ${trpcResponse.status}`);
+      setTestResult(prev => prev + `\nTRPC Response: ${trpcText.substring(0, 500)}`);
+
     } catch (error: any) {
-      setTestResult(prev => prev + `\n❌ Error: ${error.message}\n${error.stack}\n`);
+      setTestResult(prev => prev + `\n\n❌ Error: ${error.message}\n${error.stack}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateQuestionMutation = trpc.questions.generate.useMutation();
+
+  const testTRPC = async () => {
+    setLoading(true);
+    setTestResult("Testing tRPC mutation...");
+    try {
+      const result = await generateQuestionMutation.mutateAsync({
+        topic: "Science",
+        difficulty: "easy",
+        language: "en",
+      });
+      setTestResult(`✅ tRPC Success:\n${JSON.stringify(result, null, 2)}`);
+    } catch (error: any) {
+      setTestResult(`❌ tRPC Error:\n${error.message}\n\n${error.stack}`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <Stack.Screen options={{ title: "API Debug" }} />
-      
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          style={[styles.button, loading && styles.buttonDisabled]} 
-          onPress={testDirectFetch}
-          disabled={loading}
-        >
+    <View style={styles.container}>
+      <Stack.Screen options={{ title: "Debug API" }} />
+      <View style={styles.content}>
+        <Text style={styles.title}>API Debug Tool</Text>
+        
+        <TouchableOpacity style={styles.button} onPress={testFetch} disabled={loading}>
           <Text style={styles.buttonText}>Test Direct Fetch</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.button, loading && styles.buttonDisabled]} 
-          onPress={testTRPC}
-          disabled={loading}
-        >
-          <Text style={styles.buttonText}>Test tRPC Endpoint</Text>
+
+        <TouchableOpacity style={styles.button} onPress={testTRPC} disabled={loading}>
+          <Text style={styles.buttonText}>Test tRPC Mutation</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.button, loading && styles.buttonDisabled]} 
-          onPress={testTRPCClient}
-          disabled={loading}
-        >
-          <Text style={styles.buttonText}>Test Generate Question</Text>
-        </TouchableOpacity>
+
+        {loading && <ActivityIndicator size="large" color="#00E6A8" style={{ marginTop: 20 }} />}
+
+        <ScrollView style={styles.resultContainer}>
+          <Text style={styles.resultText}>{testResult}</Text>
+        </ScrollView>
       </View>
-      
-      <ScrollView style={styles.resultContainer}>
-        <Text style={styles.resultText}>{testResult || "Click a button to test the API"}</Text>
-      </ScrollView>
     </View>
   );
 }
@@ -155,36 +94,40 @@ export default function DebugAPIScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000",
-    padding: 16,
+    backgroundColor: "#0A0E27",
   },
-  buttonContainer: {
-    gap: 12,
-    marginBottom: 16,
+  content: {
+    flex: 1,
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+    marginBottom: 20,
   },
   button: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#00E6A8",
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 12,
+    marginBottom: 12,
     alignItems: "center",
   },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
   buttonText: {
-    color: "#FFF",
+    color: "#0A0E27",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "bold",
   },
   resultContainer: {
     flex: 1,
-    backgroundColor: "#1C1C1E",
-    borderRadius: 8,
-    padding: 12,
+    marginTop: 20,
+    backgroundColor: "#1A1F3A",
+    borderRadius: 12,
+    padding: 16,
   },
   resultText: {
-    color: "#FFF",
-    fontFamily: "monospace",
+    color: "#FFFFFF",
     fontSize: 12,
+    fontFamily: "monospace",
   },
 });

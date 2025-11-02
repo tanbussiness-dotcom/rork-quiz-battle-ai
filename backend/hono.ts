@@ -37,9 +37,9 @@ app.onError((err, c) => {
 });
 
 app.use(
-  "/api/trpc/*",
+  "/trpc/*",
   trpcServer({
-    endpoint: "/api/trpc",
+    endpoint: "/trpc",
     router: appRouter,
     createContext,
   })
@@ -49,20 +49,12 @@ app.get("/", (c) => {
   return c.json({ 
     status: "ok", 
     message: "Quiz Battle AI Backend",
+    note: "This backend is mounted at /api/* by Expo Router",
     endpoints: {
-      health: "/",
-      testOpenAI: "/test-openai",
-      trpc: "/api/trpc"
+      health: "/ (accessed as /api/)",
+      testOpenAI: "/test-openai (accessed as /api/test-openai)",
+      trpc: "/trpc (accessed as /api/trpc)"
     },
-    openAIConfigured: !!process.env.OPENAI_API_KEY
-  });
-});
-
-app.get("/api", (c) => {
-  return c.json({ 
-    status: "ok", 
-    message: "API endpoint",
-    trpcEndpoint: "/api/trpc",
     openAIConfigured: !!process.env.OPENAI_API_KEY
   });
 });

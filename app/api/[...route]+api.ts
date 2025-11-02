@@ -10,12 +10,32 @@ async function handleRequest(request: Request, method: string) {
     const url = new URL(request.url);
     console.log(`🔍 [API Route] Path:`, url.pathname);
     console.log(`🔍 [API Route] Search:`, url.search);
+    console.log(`🔍 [API Route] Method:`, request.method);
+    console.log(`🔍 [API Route] Headers:`, JSON.stringify([...request.headers.entries()]));
     
-    const response = await app.fetch(request);
+    const pathWithoutApi = url.pathname.replace(/^\/api/, "");
+    console.log(`🔍 [API Route] Path without /api prefix:`, pathWithoutApi);
+    
+    const honoUrl = new URL(pathWithoutApi + url.search, url.origin);
+    console.log(`🔍 [API Route] Hono URL:`, honoUrl.toString());
+    
+    const honoRequest = new Request(honoUrl, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+    });
+    
+    const response = await app.fetch(honoRequest);
     console.log(`✅ [API Route] Response status:`, response.status);
+    console.log(`✅ [API Route] Response headers:`, JSON.stringify([...response.headers.entries()]));
+    
+    const contentType = response.headers.get("content-type");
+    console.log(`✅ [API Route] Response content-type:`, contentType);
+    
     return response;
   } catch (error: any) {
     console.error(`❌ [API Route] Error handling ${method} request:`, error);
+    console.error(`❌ [API Route] Error stack:`, error.stack);
     return new Response(
       JSON.stringify({ 
         error: "Internal server error", 
