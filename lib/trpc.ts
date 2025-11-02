@@ -14,10 +14,10 @@ function getBaseUrl(): string {
   console.log("🔍 [tRPC] EXPO_PUBLIC_RORK_API_BASE_URL:", envUrl || "(not set)");
 
   if (Platform.OS === "web") {
-    console.log("✅ [tRPC] Web platform detected. Using Rork backend proxy.");
+    console.log("✅ [tRPC] Web platform detected. Using local API route.");
     if (typeof window !== "undefined") {
-      const backendUrl = "/__api__";
-      console.log("✅ [tRPC] Backend proxy URL:", backendUrl);
+      const backendUrl = "/api";
+      console.log("✅ [tRPC] Backend API URL:", backendUrl);
       return backendUrl;
     }
     return "";
