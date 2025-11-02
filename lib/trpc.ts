@@ -38,7 +38,7 @@ const baseUrl = getBaseUrl();
 const trpcUrl = `${baseUrl}/api/trpc`;
 console.log("🔗 [tRPC] Base URL:", baseUrl);
 console.log("🔗 [tRPC] Full tRPC endpoint:", trpcUrl);
-console.log("🔗 [tRPC] Note: Expo API route at /api/[...route] strips /api prefix, so Hono sees /trpc");
+console.log("🔗 [tRPC] Note: Expo API route at /api/[...path] strips /api prefix, so Hono sees /trpc");
 
 
 

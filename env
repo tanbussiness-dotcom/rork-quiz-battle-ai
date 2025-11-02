@@ -9,6 +9,8 @@ EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
 EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
 
 # Backend API URL (automatically set by Rork platform)
+# Leave empty for web (uses window.location.origin)
+# Set this for native mobile apps to point to your development server
 EXPO_PUBLIC_RORK_API_BASE_URL=
 
 # OpenAI (ChatGPT) Configuration
