@@ -39,7 +39,6 @@ app.onError((err, c) => {
 app.use(
   "/trpc/*",
   trpcServer({
-    endpoint: "/trpc",
     router: appRouter,
     createContext,
   })

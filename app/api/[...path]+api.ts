@@ -52,31 +52,26 @@ async function handleRequest(request: Request): Promise<Response> {
   }
 }
 
-export function GET(request: Request) {
+export async function GET(request: Request) {
   return handleRequest(request);
 }
 
-export function POST(request: Request) {
+export async function POST(request: Request) {
   return handleRequest(request);
 }
 
-export function PUT(request: Request) {
+export async function PUT(request: Request) {
   return handleRequest(request);
 }
 
-export function DELETE(request: Request) {
+export async function DELETE(request: Request) {
   return handleRequest(request);
 }
 
-export function PATCH(request: Request) {
+export async function PATCH(request: Request) {
   return handleRequest(request);
 }
 
-export function OPTIONS(request: Request) {
-  return handleRequest(request);
-}
-
-export default async function handler(request: Request) {
-  console.log("👀 [API] Default handler called:", request.method, request.url);
+export async function OPTIONS(request: Request) {
   return handleRequest(request);
 }

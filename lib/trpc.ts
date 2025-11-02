@@ -14,11 +14,11 @@ function getBaseUrl(): string {
   console.log("🔍 [tRPC] EXPO_PUBLIC_RORK_API_BASE_URL:", envUrl || "(not set)");
 
   if (Platform.OS === "web") {
-    console.log("✅ [tRPC] Web platform detected. Using window.location.origin for API path.");
+    console.log("✅ [tRPC] Web platform detected. Using Rork backend proxy.");
     if (typeof window !== "undefined") {
-      const origin = window.location.origin;
-      console.log("✅ [tRPC] Window origin:", origin);
-      return origin;
+      const backendUrl = "/__api__";
+      console.log("✅ [tRPC] Backend proxy URL:", backendUrl);
+      return backendUrl;
     }
     return "";
   }
@@ -35,14 +35,13 @@ function getBaseUrl(): string {
 }
 
 const baseUrl = getBaseUrl();
-const trpcUrl = `${baseUrl}/api/trpc`;
+const trpcUrl = `${baseUrl}/trpc`;
 console.log("🔗 [tRPC] Base URL:", baseUrl);
 console.log("🔗 [tRPC] Full tRPC endpoint:", trpcUrl);
-console.log("🔗 [tRPC] Note: Expo API route at /api/[...path] strips /api prefix, so Hono sees /trpc");
 
 if (typeof window !== "undefined" && Platform.OS === "web") {
   console.log("🔗 [tRPC] Testing backend availability...");
-  fetch(`${baseUrl}/api/`)
+  fetch(`${baseUrl}/`)
     .then(res => res.json())
     .then(data => console.log("✅ [tRPC] Backend health check:", data))
     .catch(err => console.error("❌ [tRPC] Backend not reachable:", err.message));
