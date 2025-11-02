@@ -5,25 +5,31 @@ console.log("🚀 [API] Route handler initializing...");
 async function handleRequest(request: Request, method: string) {
   try {
     console.log(`📥 [API] ${method} request:`, request.url);
-    
+
     const url = new URL(request.url);
     const pathWithoutApi = url.pathname.replace(/^\/api/, "") || "/";
-    
+
     console.log("🔄 [API] Original path:", url.pathname);
     console.log("🔄 [API] Path for Hono:", pathWithoutApi);
-    
+
     const honoUrl = new URL(pathWithoutApi + url.search, url.origin);
-    
+
     const honoRequest = new Request(honoUrl, {
       method: request.method,
       headers: request.headers,
-      body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined,
-      duplex: request.method !== "GET" && request.method !== "HEAD" ? "half" : undefined,
+      body:
+        request.method !== "GET" && request.method !== "HEAD"
+          ? request.body
+          : undefined,
+      // Note: duplex is only relevant in some runtimes; keep it conditional-safe
+      // @ts-expect-error web runtime may not accept duplex, it's ignored when unsupported
+      duplex:
+        request.method !== "GET" && request.method !== "HEAD" ? "half" : undefined,
     } as RequestInit);
-    
+
     const response = await app.fetch(honoRequest);
     console.log("✅ [API] Response status:", response.status);
-    
+
     return response;
   } catch (error: any) {
     console.error("❌ [API] Error:", error);
