@@ -58,20 +58,20 @@ function RoomCard({ room, isNew, onJoin }: RoomCardProps) {
         Animated.timing(glowAnim, {
           toValue: 1,
           duration: 1000,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.timing(glowAnim, {
           toValue: 0,
           duration: 1000,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ]).start();
     }
   }, [slideAnim, glowAnim, isNew]);
 
-  const borderColor = glowAnim.interpolate({
+  const borderOpacity = glowAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [Colors.border, Colors.primary],
+    outputRange: [0, 1],
   });
 
   const iconColors: Record<string, [string, string]> = {
@@ -102,9 +102,21 @@ function RoomCard({ room, isNew, onJoin }: RoomCardProps) {
     <Animated.View
       style={[
         styles.roomCard,
-        { transform: [{ translateX: slideAnim }], borderColor },
+        { transform: [{ translateX: slideAnim }] },
       ]}
     >
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: Colors.primary,
+            opacity: borderOpacity,
+          },
+        ]}
+        pointerEvents="none"
+      />
       <View style={styles.roomHeader}>
         <View style={styles.roomInfo}>
           <LinearGradient

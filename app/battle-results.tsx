@@ -202,12 +202,12 @@ function ProgressBar({ progress }: { progress: number }) {
         Animated.timing(pulseAnim, {
           toValue: 1.05,
           duration: 1000,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 1000,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ])
     ).start();
@@ -232,7 +232,10 @@ function ProgressBar({ progress }: { progress: number }) {
               style={[
                 styles.progressBarShine,
                 {
-                  transform: [{ scaleX: pulseAnim }],
+                  opacity: pulseAnim.interpolate({
+                    inputRange: [1, 1.05],
+                    outputRange: [0.2, 0.4],
+                  }),
                 },
               ]}
             />
@@ -279,12 +282,12 @@ function GlowButton({
         Animated.timing(glowAnim, {
           toValue: 1,
           duration: 1500,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.timing(glowAnim, {
           toValue: 0,
           duration: 1500,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ])
     ).start();

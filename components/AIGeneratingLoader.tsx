@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Animated, Easing } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Brain, Sparkles, Zap } from "lucide-react-native";
@@ -16,7 +16,7 @@ export default function AIGeneratingLoader({
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const sparkleAnim = useRef(new Animated.Value(0)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
+  const [progressValue, setProgressValue] = useState(0);
   const particleAnims = useRef(
     Array.from({ length: 6 }, () => new Animated.Value(0))
   ).current;
@@ -63,21 +63,12 @@ export default function AIGeneratingLoader({
       ])
     ).start();
 
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(progressAnim, {
-          toValue: 1,
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }),
-        Animated.timing(progressAnim, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: false,
-        }),
-      ])
-    ).start();
+    const progressInterval = setInterval(() => {
+      setProgressValue((prev) => {
+        if (prev >= 100) return 0;
+        return prev + 2;
+      });
+    }, 40);
 
     particleAnims.forEach((anim, i) => {
       Animated.loop(
@@ -97,17 +88,16 @@ export default function AIGeneratingLoader({
         ])
       ).start();
     });
-  }, [pulseAnim, rotateAnim, sparkleAnim, progressAnim, particleAnims]);
+
+    return () => clearInterval(progressInterval);
+  }, [pulseAnim, rotateAnim, sparkleAnim, particleAnims]);
 
   const rotate = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ["0deg", "360deg"],
   });
 
-  const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0%", "100%"],
-  });
+  const progressWidth = `${progressValue}%`;
 
   return (
     <View style={styles.container}>
@@ -201,7 +191,7 @@ export default function AIGeneratingLoader({
 
           <View style={styles.progressBarContainer}>
             <View style={styles.progressBarTrack}>
-              <Animated.View
+              <View
                 style={[
                   styles.progressBarFill,
                   {
@@ -215,7 +205,7 @@ export default function AIGeneratingLoader({
                   end={{ x: 1, y: 0 }}
                   style={styles.progressBarGradient}
                 />
-              </Animated.View>
+              </View>
             </View>
             <View style={styles.dotsContainer}>
               {[0, 1, 2].map((i) => (
