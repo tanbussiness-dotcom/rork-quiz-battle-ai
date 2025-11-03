@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
@@ -12,6 +12,13 @@ const app = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApp();
 const auth = getAuth(app);
 
 const db = getFirestore(app);
+
+if (Platform.OS === 'web') {
+  enableIndexedDbPersistence(db).catch((err) => {
+    console.log("enableIndexedDbPersistence error", err);
+  });
+}
+
 const realtimeDb = getDatabase(app);
 const storage = getStorage(app);
 

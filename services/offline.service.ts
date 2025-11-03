@@ -1,7 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, runTransaction, setDoc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { UserProfile } from "@/contexts/UserProfileContext";
+import type { Question } from "@/models/question";
+import { getOfflineQuestions } from "@/services/question.service";
 
 const PROGRESS_QUEUE_KEY = "/local/progressQueue";
 
@@ -56,7 +58,17 @@ export async function flushProgressQueue(): Promise<{ success: number; failed: n
     try {
       if (item.type === "updateProfile") {
         const ref = doc(db, "users", item.uid);
-        await updateDoc(ref, { ...item.updates, updatedAt: Date.now() });
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(ref);
+          const existing = snap.exists() ? (snap.data() as UserProfile & { updatedAt?: number }) : undefined;
+          const existingUpdatedAt = existing?.updatedAt ?? 0;
+          const localOpTs = item.createdAt;
+          if (localOpTs >= existingUpdatedAt) {
+            tx.update(ref, { ...item.updates, updatedAt: Date.now() });
+          } else {
+            // Skip outdated local update to protect against overwriting newer server data
+          }
+        });
       }
       success += 1;
     } catch (e) {
@@ -68,4 +80,29 @@ export async function flushProgressQueue(): Promise<{ success: number; failed: n
 
   await writeQueue(remaining);
   return { success, failed };
+}
+
+export async function syncCachedQuestions(): Promise<{ created: number; skipped: number }> {
+  try {
+    const cached = await getOfflineQuestions();
+    let created = 0;
+    let skipped = 0;
+
+    for (const q of cached as Question[]) {
+      const ref = doc(db, "questions", q.id);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        skipped += 1;
+        continue;
+      }
+      const payload: Record<string, any> = { ...q };
+      await setDoc(ref, payload);
+      created += 1;
+    }
+
+    return { created, skipped };
+  } catch (e) {
+    console.log("syncCachedQuestions error", e);
+    return { created: 0, skipped: 0 };
+  }
 }

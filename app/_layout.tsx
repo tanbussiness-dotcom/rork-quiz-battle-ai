@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { UserProfileProvider } from "@/contexts/UserProfileContext";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { I18nProvider } from "@/contexts/I18nContext";
+import SyncManager from "@/components/SyncManager";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -68,6 +69,7 @@ export default function RootLayout() {
           <AuthProvider>
             <I18nProvider>
               <UserProfileProvider>
+                <SyncManager />
                 <RootLayoutNav />
               </UserProfileProvider>
             </I18nProvider>
