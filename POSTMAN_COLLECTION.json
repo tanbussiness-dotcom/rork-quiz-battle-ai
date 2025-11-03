@@ -1,0 +1,56 @@
+{
+  "info": {
+    "name": "Quiz Battle AI Backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": { "method": "GET", "url": "http://localhost:3000/" }
+    },
+    {
+      "name": "List Quizzes",
+      "request": { "method": "GET", "url": "http://localhost:3000/quizzes" }
+    },
+    {
+      "name": "Create Quiz",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"AI Test\",\n  \"questions\": [ { \"question\": \"2+2?\", \"answer\": \"4\", \"options\":[\"4\",\"3\"] } ]\n}"
+        },
+        "url": "http://localhost:3000/quizzes"
+      }
+    },
+    {
+      "name": "Get Quiz by ID",
+      "request": { "method": "GET", "url": "http://localhost:3000/quizzes/{{quizId}}" }
+    },
+    {
+      "name": "Battle Create",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"create\",\n  \"hostId\": \"u1\",\n  \"hostName\": \"Alice\",\n  \"topic\": \"science\",\n  \"difficulty\": \"medium\"\n}"
+        },
+        "url": "http://localhost:3000/battle"
+      }
+    },
+    {
+      "name": "Battle Join",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"join\",\n  \"roomId\": \"{{roomId}}\",\n  \"uid\": \"u2\",\n  \"name\": \"Bob\"\n}"
+        },
+        "url": "http://localhost:3000/battle"
+      }
+    }
+  ]
+}
