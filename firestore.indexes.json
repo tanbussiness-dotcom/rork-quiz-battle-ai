@@ -1,7 +1,7 @@
 {
   "indexes": [
     {
-      "collectionGroup": "leaderboards",
+      "collectionGroup": "leaderboard",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "mode", "order": "ASCENDING" },
