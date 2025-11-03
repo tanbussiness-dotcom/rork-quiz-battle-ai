@@ -19,6 +19,7 @@ import GradientButton from "@/components/GradientButton";
 import { QuizQuestion, generateQuestionsWithChatGPT } from "@/lib/gemini";
 import { saveMinimalQuestion, getOfflineQuestions } from "@/services/question.service";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { QUIZ_TOPICS } from "@/constants/topics";
 import { useI18n } from "@/contexts/I18nContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -34,6 +35,7 @@ export default function QuizPlayScreen() {
   const router = useRouter();
   const { topic, difficulty } = useLocalSearchParams<{ topic?: string; difficulty?: string }>();
   const { profile, updateProfile, incrementScore } = useUserProfile();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { language } = useI18n();
   
@@ -42,6 +44,7 @@ export default function QuizPlayScreen() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
   const online = useOnlineStatus();
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [answers, setAnswers] = useState<(string | null)[]>([]);
   const [score, setScore] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [timeLeft, setTimeLeft] = useState<number>(TIME_PER_QUESTION);
@@ -59,15 +62,13 @@ export default function QuizPlayScreen() {
   }, []);
 
   useEffect(() => {
-    if (!loading && !answered && timeLeft > 0) {
-      const timer = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-    if (timeLeft === 0 && !answered) {
+    if (loading || answered) return;
+    if (timeLeft <= 0) {
       handleTimeout();
+      return;
     }
+    const t = setTimeout(() => setTimeLeft((p) => p - 1), 1000);
+    return () => clearTimeout(t);
   }, [timeLeft, loading, answered]);
 
   const loadQuestions = async () => {
@@ -100,12 +101,27 @@ export default function QuizPlayScreen() {
           topic: q.topic,
         }));
         setQuestions(mapped);
+        setAnswers(new Array(mapped.length).fill(null));
         return;
       }
       
-      const chosenDifficulty = (typeof difficulty === "string" && difficulty.length > 0)
+      let chosenDifficulty = (typeof difficulty === "string" && difficulty.length > 0)
         ? (difficulty[0].toUpperCase() + difficulty.slice(1).toLowerCase())
         : "Medium";
+
+      try {
+        const rateKey = `ai_success_rate_${topicData?.id ?? "general"}`;
+        const raw = await import("@react-native-async-storage/async-storage");
+        const stored = await raw.default.getItem(rateKey);
+        const rate = stored ? parseFloat(stored) : NaN;
+        if (!Number.isNaN(rate)) {
+          if (rate >= 85) chosenDifficulty = chosenDifficulty === "Challenge" ? "Challenge" : "Hard";
+          else if (rate >= 70) chosenDifficulty = chosenDifficulty === "Easy" ? "Medium" : chosenDifficulty;
+          else if (rate < 50) chosenDifficulty = "Easy";
+        }
+      } catch (e) {
+        console.log("Adaptive difficulty read failed", e);
+      }
 
       console.log("🔍 [Quiz] Generating", QUESTIONS_PER_QUIZ, "questions online via ChatGPT...");
 
@@ -115,13 +131,14 @@ export default function QuizPlayScreen() {
         {
           difficulty: chosenDifficulty,
           language: language === "vi" ? "Vietnamese" : "English",
-          timeoutMs: 10000,
+          timeoutMs: 12000,
           retries: 2,
         }
       );
 
       console.log("✅ [Quiz] All questions generated successfully:", generatedQuestions.length);
       setQuestions(generatedQuestions);
+      setAnswers(new Array(generatedQuestions.length).fill(null));
     } catch (error: any) {
       console.error("❌ [Quiz] Error loading questions:", error);
       console.error("❌ [Quiz] Error details:", error.message);
@@ -151,6 +168,12 @@ export default function QuizPlayScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
     setAnswered(true);
+    setSelectedAnswer(null);
+    setAnswers((prev) => {
+      const next = [...prev];
+      next[currentQuestionIndex] = null;
+      return next;
+    });
   };
 
   const handleAnswer = (answer: string) => {
@@ -158,6 +181,12 @@ export default function QuizPlayScreen() {
 
     setSelectedAnswer(answer);
     setAnswered(true);
+
+    setAnswers((prev) => {
+      const next = [...prev];
+      next[currentQuestionIndex] = answer;
+      return next;
+    });
 
     const currentQuestion = questions[currentQuestionIndex];
     const isCorrect = answer === currentQuestion.correctAnswer;
@@ -235,23 +264,45 @@ export default function QuizPlayScreen() {
   }, [answered, selectedAnswer, currentQuestionIndex, questions, ensureMentorQuestionSaved]);
 
   const finishQuiz = async () => {
-    const correctAnswers = questions.filter(
-      (q, index) => selectedAnswer === q.correctAnswer
-    ).length;
+    const correctCount = questions.reduce((acc, q, i) => acc + (answers[i] != null && answers[i] === q.correctAnswer ? 1 : 0), 0);
 
-    await incrementScore(score);
-    await updateProfile({
-      totalQuestions: (profile?.totalQuestions || 0) + questions.length,
-      correctAnswers: (profile?.correctAnswers || 0) + correctAnswers,
-      soloGamesPlayed: (profile?.soloGamesPlayed || 0) + 1,
-    });
+    try {
+      if (user?.uid) {
+        const { updatePlayerProgress } = await import("@/services/user.service");
+        await updatePlayerProgress(
+          user.uid,
+          score,
+          correctCount,
+          questions.length,
+          'solo',
+          topicData?.id
+        );
+      }
+    } catch (e) {
+      console.log("Progress save fallback to profile context", e);
+      await incrementScore(score);
+      await updateProfile({
+        totalQuestions: (profile?.totalQuestions || 0) + questions.length,
+        correctAnswers: (profile?.correctAnswers || 0) + correctCount,
+        soloGamesPlayed: (profile?.soloGamesPlayed || 0) + 1,
+      });
+    }
+
+    try {
+      const raw = await import("@react-native-async-storage/async-storage");
+      const rateKey = `ai_success_rate_${topicData?.id ?? "general"}`;
+      const rate = questions.length > 0 ? (correctCount / questions.length) * 100 : 0;
+      await raw.default.setItem(rateKey, String(Math.round(rate)));
+    } catch (e) {
+      console.log("Adaptive difficulty write failed", e);
+    }
 
     router.replace({
       pathname: "/results" as any,
       params: {
-        score: score.toString(),
-        total: QUESTIONS_PER_QUIZ.toString(),
-        correct: correctAnswers.toString(),
+        score: String(score),
+        total: String(questions.length),
+        correct: String(correctCount),
       },
     });
   };
