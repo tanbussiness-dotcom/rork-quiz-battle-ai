@@ -122,7 +122,7 @@ export default function QuizPlayScreen() {
         console.log("Adaptive difficulty read failed", e);
       }
 
-      console.log("🔍 [Quiz] Generating", QUESTIONS_PER_QUIZ, "questions online via ChatGPT...");
+      console.log("🔍 [Quiz] Generating", QUESTIONS_PER_QUIZ, "questions online via Gemini...");
 
       const generatedQuestions = await generateQuestionsWithChatGPT(
         topicData?.name || "General Knowledge",
@@ -147,7 +147,7 @@ export default function QuizPlayScreen() {
       
       if (error.message?.includes("Failed to fetch") || error.message?.includes("fetch")) {
         errorMessage += "Cannot connect to the server. Please check your internet connection and try again.";
-      } else if (error.message?.includes("OpenAI")) {
+      } else if (error.message?.includes("Gemini")) {
         errorMessage += "AI service is currently unavailable. Please try again later.";
       } else {
         errorMessage += error.message || "Please try again.";

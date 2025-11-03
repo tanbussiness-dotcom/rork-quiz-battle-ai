@@ -4,7 +4,7 @@ const port = parseInt(process.env.PORT || "3000");
 
 console.log("🚀 Starting Quiz Battle AI Backend Server...");
 console.log("📦 Environment:", process.env.NODE_ENV || "development");
-console.log("🔑 OpenAI API Key:", process.env.OPENAI_API_KEY ? "✅ Configured" : "❌ Missing");
+console.log("🔑 Gemini API Key:", process.env.GEMINI_API_KEY ? "✅ Configured" : "❌ Missing");
 
 if (typeof Bun !== "undefined") {
   Bun.serve({

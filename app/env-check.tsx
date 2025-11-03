@@ -12,7 +12,7 @@ export default function EnvCheckScreen() {
   const envVars = {
     "Platform": Platform.OS,
     "EXPO_PUBLIC_RORK_API_BASE_URL": process.env.EXPO_PUBLIC_RORK_API_BASE_URL || "(not set)",
-    "OPENAI_API_KEY": process.env.OPENAI_API_KEY ? `Set (${process.env.OPENAI_API_KEY.substring(0, 10)}...)` : "(not set - backend only)",
+    "GEMINI_API_KEY": process.env.GEMINI_API_KEY ? `Set (${process.env.GEMINI_API_KEY.substring(0, 10)}...)` : "(not set - backend only)",
     "EXPO_PUBLIC_FIREBASE_API_KEY": process.env.EXPO_PUBLIC_FIREBASE_API_KEY ? "✅ Set" : "❌ Not set",
     "EXPO_PUBLIC_FIREBASE_PROJECT_ID": process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "(not set)",
   };

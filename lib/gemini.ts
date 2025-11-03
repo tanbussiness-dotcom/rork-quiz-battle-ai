@@ -1,6 +1,5 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from "react-native";
 
 export interface QuizQuestion {
   id: string;
@@ -20,8 +19,7 @@ export interface GenerateQuestionsParams {
   language?: string;
 }
 
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const OPENAI_MODEL = "gpt-4o-mini";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent";
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -38,27 +36,35 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-async function callOpenAI(prompt: string, timeoutMs: number): Promise<string> {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("Missing OPENAI_API_KEY");
+async function callGemini(prompt: string, timeoutMs: number): Promise<string> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("Missing GEMINI_API_KEY");
   }
 
   const controller = new AbortController();
   const to = setTimeout(() => controller.abort(), timeoutMs + 2000);
 
-  const res = await fetch(OPENAI_URL, {
+  const url = `${GEMINI_API_URL}?key=${process.env.GEMINI_API_KEY}`;
+
+  const res = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
-      messages: [
-        { role: "system", content: "You are an expert quiz generator and explainer. Return only requested format." },
-        { role: "user", content: prompt },
+      contents: [
+        {
+          parts: [
+            {
+              text: prompt,
+            },
+          ],
+        },
       ],
-      temperature: 0.7,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 2048,
+      },
     }),
     signal: controller.signal,
   });
@@ -66,12 +72,12 @@ async function callOpenAI(prompt: string, timeoutMs: number): Promise<string> {
 
   if (!res.ok) {
     const errText = await res.text();
-    console.error("[OpenAI] Error", res.status, errText);
-    throw new Error(`OpenAI ${res.status}`);
+    console.error("[Gemini] Error", res.status, errText);
+    throw new Error(`Gemini ${res.status}`);
   }
 
   const data: any = await res.json();
-  const text: string = data?.choices?.[0]?.message?.content?.toString?.() ?? "";
+  const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   return text.replace(/```json|```/g, "").trim();
 }
 
@@ -87,14 +93,23 @@ export async function generateQuestionsWithChatGPT(
 
   const cacheKey = `cached_questions_${topic}_${difficulty}_${language}`;
 
-  const prompt = `Generate ${count} multiple-choice and true/false quiz questions about ${topic}.
-Return ONLY a JSON array of objects with keys: type ("multiple_choice" or "true_false"), question, options (array; for true_false use ["True","False"]), correctAnswer (string), explanation (string), difficulty (one of "Easy","Medium","Hard","Challenge"), topic ("${topic}").`;
+  const prompt = `You are an expert quiz generator. Generate ${count} multiple-choice and true/false quiz questions about ${topic}.
+Return ONLY a JSON array of objects with these exact keys:
+- type: either "multiple_choice" or "true_false"
+- question: the question text (string)
+- options: array of strings (for multiple_choice use 4 options, for true_false use ["True","False"])
+- correctAnswer: single string with the correct answer
+- explanation: brief explanation (string)
+- difficulty: one of "Easy", "Medium", "Hard", or "Challenge"
+- topic: "${topic}"
+
+Return only valid JSON, no markdown formatting.`;
 
   let attempt = 0;
   while (attempt <= retries) {
     try {
       console.log(`[AI] attempt ${attempt + 1}/${retries + 1} generating ${count} for ${topic}`);
-      const text = await withTimeout(callOpenAI(prompt, timeoutMs), timeoutMs);
+      const text = await withTimeout(callGemini(prompt, timeoutMs), timeoutMs);
       const parsed = JSON.parse(text) as any[];
       const normalized: QuizQuestion[] = parsed.map((q: any, i: number) => ({
         id: `${Date.now()}_${i}`,
@@ -121,7 +136,7 @@ Return ONLY a JSON array of objects with keys: type ("multiple_choice" or "true_
 
   const cached = await AsyncStorage.getItem(cacheKey);
   if (cached) {
-    console.warn("⚠️ ChatGPT failed, loading cached questions");
+    console.warn("⚠️ Gemini failed, loading cached questions");
     return JSON.parse(cached) as QuizQuestion[];
   }
 
@@ -138,8 +153,17 @@ export type SingleAIQuestion = {
 
 export async function generateSingleQuestion(params: { topic: string; difficulty: string; language?: string; }): Promise<SingleAIQuestion> {
   const { topic, difficulty, language = "English" } = params;
-  const prompt = `Generate exactly 1 quiz question about "${topic}" with difficulty "${difficulty}" in ${language}. Return ONLY valid JSON object with keys: type (one of multipleChoice,trueFalse,fillBlank,mediaBased,riddle), content, options (array for multipleChoice or [\"True\",\"False\"] for trueFalse), correctAnswer (string), explanation (string).`;
-  const text = await withTimeout(callOpenAI(prompt, 8000), 8000);
+  const prompt = `You are an expert quiz generator. Generate exactly 1 quiz question about "${topic}" with difficulty "${difficulty}" in ${language}.
+Return ONLY a valid JSON object with these exact keys:
+- type: one of "multipleChoice", "trueFalse", "fillBlank", "mediaBased", or "riddle"
+- content: the question text (string)
+- options: array of strings (for multipleChoice use 4 options, for trueFalse use ["True","False"])
+- correctAnswer: single string with the correct answer
+- explanation: brief explanation (string)
+
+Return only valid JSON, no markdown formatting.`;
+  
+  const text = await withTimeout(callGemini(prompt, 8000), 8000);
   const obj = JSON.parse(text);
   return obj as SingleAIQuestion;
 }
@@ -151,7 +175,7 @@ export async function getAIExplanation(
   language: string = "English"
 ): Promise<string> {
   const prompt = `Explain in ${language} why the correct answer to the following question is "${correctAnswer}" and not "${userAnswer}". Be concise (2-3 sentences). Question: ${question}`;
-  const text = await withTimeout(callOpenAI(prompt, 8000), 8000);
+  const text = await withTimeout(callGemini(prompt, 8000), 8000);
   return text;
 }
 

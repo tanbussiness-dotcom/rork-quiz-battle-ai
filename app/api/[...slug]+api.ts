@@ -3,7 +3,7 @@ import app from "@/backend/hono";
 console.log("🚀 [API Route] Loaded: app/api/[...slug]+api.ts");
 console.log("🚀 [API Route] Environment:", {
   NODE_ENV: process.env.NODE_ENV,
-  hasOpenAI: !!process.env.OPENAI_API_KEY,
+  hasGemini: !!process.env.GEMINI_API_KEY,
 });
 console.log("✅ [API Route] Hono app loaded successfully");
 

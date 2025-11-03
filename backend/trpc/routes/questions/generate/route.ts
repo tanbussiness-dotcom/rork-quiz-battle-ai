@@ -47,12 +47,12 @@ const generateQuestionProcedure = publicProcedure
   .input(inputSchema)
   .mutation(async ({ input }) => {
     console.log("🔍 [Generate Question] Starting generation...");
-    console.log("🔍 [Generate Question] OPENAI_API_KEY exists:", !!process.env.OPENAI_API_KEY);
-    console.log("🔍 [Generate Question] Key length:", process.env.OPENAI_API_KEY?.length || 0);
+    console.log("🔍 [Generate Question] GEMINI_API_KEY exists:", !!process.env.GEMINI_API_KEY);
+    console.log("🔍 [Generate Question] Key length:", process.env.GEMINI_API_KEY?.length || 0);
     
-    if (!process.env.OPENAI_API_KEY) {
-      console.error("❌ [Generate Question] Missing OPENAI_API_KEY");
-      throw new Error("OpenAI API key not configured on server. Please contact support.");
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("❌ [Generate Question] Missing GEMINI_API_KEY");
+      throw new Error("Gemini API key not configured on server. Please contact support.");
     }
     
     const { topic, difficulty, language } = input;
