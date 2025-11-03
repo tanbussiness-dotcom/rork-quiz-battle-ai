@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { enableIndexedDbPersistence, initializeFirestore, CACHE_SIZE_UNLIMITED } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
@@ -11,12 +11,29 @@ const app = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApp();
 
 const auth = getAuth(app);
 
-const db = getFirestore(app);
+const db = initializeFirestore(app, {
+  cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+});
 
-if (Platform.OS === 'web') {
-  enableIndexedDbPersistence(db).catch((err) => {
-    console.log("enableIndexedDbPersistence error", err);
-  });
+let persistenceEnabled = false;
+
+if (Platform.OS === 'web' && !persistenceEnabled) {
+  enableIndexedDbPersistence(db, {
+    forceOwnership: false
+  })
+    .then(() => {
+      console.log("✅ Firestore persistence enabled");
+      persistenceEnabled = true;
+    })
+    .catch((err) => {
+      if (err.code === 'failed-precondition') {
+        console.warn("⚠️ Multiple tabs open, persistence disabled");
+      } else if (err.code === 'unimplemented') {
+        console.warn("⚠️ Browser doesn't support persistence");
+      } else {
+        console.error("❌ Persistence error:", err);
+      }
+    });
 }
 
 const realtimeDb = getDatabase(app);
