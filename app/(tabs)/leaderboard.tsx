@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { Stack } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -12,28 +13,30 @@ import { Trophy, Medal, Award } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import GlowingCard from "@/components/GlowingCard";
 import { useQuery } from "@tanstack/react-query";
-import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { UserProfile } from "@/contexts/UserProfileContext";
+import { getLeaderboard } from "@/services/leaderboard.service";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useState } from "react";
 
 export default function LeaderboardScreen() {
   const insets = useSafeAreaInsets();
+  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'all_time'>('all_time');
+  const [mode, setMode] = useState<'solo' | 'battle'>('solo');
 
-  const { data: topPlayers, isLoading } = useQuery({
-    queryKey: ["leaderboard"],
+  const { data: topPlayers, isLoading, error } = useQuery({
+    queryKey: ["leaderboard", period, mode],
     queryFn: async () => {
-      const q = query(
-        collection(db, "users"),
-        orderBy("totalScore", "desc"),
-        limit(100)
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map((doc) => ({
-        ...doc.data(),
-        uid: doc.id,
-      })) as UserProfile[];
+      try {
+        console.log('📊 Fetching leaderboard:', { period, mode });
+        const entries = await getLeaderboard({ type: mode, period, limit: 100 });
+        console.log('✅ Leaderboard fetched:', entries.length, 'entries');
+        return entries;
+      } catch (err) {
+        console.error('❌ Error fetching leaderboard:', err);
+        throw err;
+      }
     },
+    staleTime: 30000,
+    refetchInterval: 60000,
   });
 
   const getRankIcon = (index: number) => {
@@ -63,33 +66,68 @@ export default function LeaderboardScreen() {
             <Text style={styles.subtitle}>Top 100 Players</Text>
           </View>
 
+          <View style={styles.filters}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+              {(['daily', 'weekly', 'monthly', 'all_time'] as const).map(p => (
+                <TouchableOpacity
+                  key={p}
+                  style={[styles.filterChip, period === p && styles.filterChipActive]}
+                  onPress={() => setPeriod(p)}
+                >
+                  <Text style={[styles.filterText, period === p && styles.filterTextActive]}>
+                    {p === 'all_time' ? 'All Time' : p.charAt(0).toUpperCase() + p.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <View style={styles.modeToggle}>
+              <TouchableOpacity
+                style={[styles.modeButton, mode === 'solo' && styles.modeButtonActive]}
+                onPress={() => setMode('solo')}
+              >
+                <Text style={[styles.modeText, mode === 'solo' && styles.modeTextActive]}>Solo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modeButton, mode === 'battle' && styles.modeButtonActive]}
+                onPress={() => setMode('battle')}
+              >
+                <Text style={[styles.modeText, mode === 'battle' && styles.modeTextActive]}>Battle</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {isLoading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={Colors.primary} />
               <Text style={styles.loadingText}>Loading rankings...</Text>
             </View>
+          ) : error ? (
+            <View style={styles.emptyContainer}>
+              <Trophy size={64} color={Colors.textTertiary} />
+              <Text style={styles.emptyText}>Failed to load leaderboard</Text>
+              <Text style={styles.emptySubtext}>Please try again later</Text>
+            </View>
           ) : (
             <View style={styles.listContainer}>
               {topPlayers?.map((player, index) => (
                 <GlowingCard
-                  key={player.uid}
+                  key={player.id}
                   style={styles.playerCard}
                   glow={index < 3}
                 >
                   <View style={styles.rankBadge}>
                     {getRankIcon(index) || (
-                      <Text style={styles.rankNumber}>{index + 1}</Text>
+                      <Text style={styles.rankNumber}>{player.rank}</Text>
                     )}
                   </View>
                   <View style={styles.playerInfo}>
-                    <Text style={styles.playerName}>{player.displayName}</Text>
+                    <Text style={styles.playerName}>{player.username || 'Anonymous'}</Text>
                     <View style={styles.playerStats}>
-                      <Text style={styles.playerRank}>{player.rank}</Text>
-                      <Text style={styles.playerLevel}>• Level {player.level}</Text>
+                      <Text style={styles.playerLevel}>{player.gamesPlayed} games</Text>
                     </View>
                   </View>
                   <View style={styles.scoreContainer}>
-                    <Text style={styles.score}>{player.totalScore}</Text>
+                    <Text style={styles.score}>{player.points}</Text>
                     <Text style={styles.scoreLabel}>points</Text>
                   </View>
                 </GlowingCard>
@@ -222,5 +260,57 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     textAlign: "center",
     paddingHorizontal: 40,
+  },
+  filters: {
+    marginBottom: 20,
+    gap: 12,
+  },
+  filterRow: {
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  filterChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  filterText: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: Colors.textSecondary,
+  },
+  filterTextActive: {
+    color: "#000",
+  },
+  modeToggle: {
+    flexDirection: "row",
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  modeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  modeButtonActive: {
+    backgroundColor: Colors.primary,
+  },
+  modeText: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: Colors.textSecondary,
+  },
+  modeTextActive: {
+    color: "#000",
   },
 });

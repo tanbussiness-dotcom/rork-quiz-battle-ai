@@ -5,8 +5,10 @@ import {
   orderBy,
   limit,
   getDocs,
-  setDoc,
   doc,
+  getDoc,
+  increment,
+  runTransaction,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { LeaderboardEntry, LeaderboardQuery } from "@/models";
@@ -20,17 +22,21 @@ export async function getLeaderboard(
 
   const q = query(
     collection(db, LEADERBOARD_COLLECTION),
-    where("type", "==", type),
+    where("mode", "==", type),
     where("period", "==", period),
-    orderBy("score", "desc"),
+    orderBy("points", "desc"),
     limit(maxResults)
   );
 
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc, index) => ({
+  const entries = snapshot.docs.map((doc) => ({
     ...doc.data(),
-    rank: index + 1,
   })) as LeaderboardEntry[];
+
+  return entries.map((entry, index) => ({
+    ...entry,
+    rank: index + 1,
+  }));
 }
 
 export async function updateLeaderboardEntry(
@@ -44,31 +50,46 @@ export async function updateLeaderboardEntry(
     type: LeaderboardQuery["type"];
     period: LeaderboardQuery["period"];
     updatedAt: number;
+    won?: boolean;
   }
 ): Promise<void> {
   const docId = `${entry.userId}_${entry.type}_${entry.period}`;
   const docRef = doc(db, LEADERBOARD_COLLECTION, docId);
 
-  const { displayName, photoURL, rank, level, score, type, period, updatedAt, userId } = entry;
-  
-  await setDoc(
-    docRef,
-    {
-      id: docId,
-      userId,
-      username: displayName || '',
-      avatar: photoURL,
-      rank: 0,
-      points: score,
-      mode: type,
-      period,
-      gamesPlayed: 0,
-      updatedAt,
-    },
-    { merge: true }
-  );
+  try {
+    await runTransaction(db, async (transaction) => {
+      const docSnap = await transaction.get(docRef);
+      
+      if (!docSnap.exists()) {
+        transaction.set(docRef, {
+          id: docId,
+          userId: entry.userId,
+          username: entry.displayName || '',
+          avatar: entry.photoURL,
+          rank: 0,
+          points: entry.score,
+          mode: entry.type,
+          period: entry.period,
+          gamesPlayed: 1,
+          updatedAt: entry.updatedAt,
+        });
+      } else {
+        const data = docSnap.data();
+        transaction.update(docRef, {
+          username: entry.displayName || data.username,
+          avatar: entry.photoURL || data.avatar,
+          points: increment(entry.score),
+          gamesPlayed: increment(1),
+          updatedAt: entry.updatedAt,
+        });
+      }
+    });
 
-  console.log("Leaderboard entry updated:", docId);
+    console.log("✅ Leaderboard entry updated:", docId);
+  } catch (error) {
+    console.error("❌ Error updating leaderboard entry:", error);
+    throw error;
+  }
 }
 
 export async function getUserRank(
@@ -79,4 +100,18 @@ export async function getUserRank(
   const leaderboard = await getLeaderboard({ type, period, limit: 1000 });
   const userEntry = leaderboard.find((entry) => entry.userId === userId);
   return userEntry?.rank || null;
+}
+
+export async function getUserLeaderboardEntry(
+  userId: string,
+  type: LeaderboardQuery["type"],
+  period: LeaderboardQuery["period"]
+): Promise<LeaderboardEntry | null> {
+  const docId = `${userId}_${type}_${period}`;
+  const docRef = doc(db, LEADERBOARD_COLLECTION, docId);
+  const docSnap = await getDoc(docRef);
+  
+  if (!docSnap.exists()) return null;
+  
+  return docSnap.data() as LeaderboardEntry;
 }

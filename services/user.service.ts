@@ -189,9 +189,6 @@ export async function updatePlayerProgress(
 
     const xpPerLevel = 100;
     const newLevel = Math.floor(newXP / xpPerLevel) + 1;
-    const leveledUp = newLevel > user.level;
-
-    const accuracy = totalQuestions > 0 ? (correctAnswers / totalQuestions) * 100 : 0;
     
     const updates: Partial<User> = {
       xp: newXP,
@@ -251,46 +248,70 @@ export async function updatePlayerProgress(
       updatedAt: Date.now(),
     });
 
-    const newBadges = await checkAndUnlockBadges(uid, {
-      totalPoints: newTotalPoints,
-      correctAnswers: user.stats.totalCorrectAnswers + correctAnswers,
-      battlesWon: mode === 'battle' && score > 0 ? user.stats.battlesWon + 1 : user.stats.battlesWon,
-      currentStreak: mode === 'battle' && score > 0 ? user.stats.currentStreak + 1 : user.stats.currentStreak,
-      rank: user.rank,
-      topic,
-      topicStats: user.stats.topicStats,
-    });
+    try {
+      const newBadges = await checkAndUnlockBadges(uid, {
+        totalPoints: newTotalPoints,
+        correctAnswers: user.stats.totalCorrectAnswers + correctAnswers,
+        battlesWon: mode === 'battle' && score > 0 ? user.stats.battlesWon + 1 : user.stats.battlesWon,
+        currentStreak: mode === 'battle' && score > 0 ? user.stats.currentStreak + 1 : user.stats.currentStreak,
+        rank: user.rank,
+        topic,
+        topicStats: user.stats.topicStats,
+      });
 
-    if (newBadges.length > 0) {
-      for (const badge of newBadges) {
-        await addBadge(uid, badge);
+      if (newBadges.length > 0) {
+        console.log('🎖️ New badges unlocked:', newBadges);
+        for (const badge of newBadges) {
+          await addBadge(uid, badge);
+        }
       }
+    } catch (badgeError) {
+      console.error('❌ Error checking badges:', badgeError);
     }
 
     const { updateLeaderboardEntry } = await import('./leaderboard.service');
     const periods: ('daily' | 'weekly' | 'monthly' | 'all_time')[] = ['daily', 'weekly', 'monthly', 'all_time'];
     
+    const scoreForLeaderboard = mode === 'solo' ? pointsGain : (score > 0 ? pointsGain : 0);
+    
     for (const period of periods) {
-      await updateLeaderboardEntry({
-        userId: uid,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        score: mode === 'solo' ? newTotalPoints : user.challengePoints,
-        level: newLevel,
-        rank: user.rank,
-        type: mode,
-        period,
-        updatedAt: Date.now(),
-      });
+      try {
+        await updateLeaderboardEntry({
+          userId: uid,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          score: scoreForLeaderboard,
+          level: newLevel,
+          rank: user.rank,
+          type: mode,
+          period,
+          updatedAt: Date.now(),
+          won: mode === 'battle' ? score > 0 : undefined,
+        });
+      } catch (leaderboardError) {
+        console.error('❌ Error updating leaderboard for period:', period, leaderboardError);
+      }
     }
 
-    console.log('Player progress updated:', {
+    try {
+      const { updateMissionProgressAfterGame } = await import('./mission.service');
+      await updateMissionProgressAfterGame(uid, {
+        mode,
+        correctAnswers,
+        topic,
+        won: mode === 'battle' ? score > 0 : undefined,
+      });
+    } catch (missionError) {
+      console.error('❌ Error updating missions:', missionError);
+    }
+
+    console.log('✅ Player progress updated:', {
       uid,
       xpGain,
       pointsGain,
       newLevel,
-      leveledUp,
-      newBadges,
+      mode,
+      topic,
     });
   } catch (error) {
     console.error('Error updating player progress:', error);

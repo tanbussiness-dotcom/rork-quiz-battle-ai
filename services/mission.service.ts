@@ -26,7 +26,7 @@ export async function getActiveMissions(type: "daily" | "weekly"): Promise<Missi
   );
 
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Mission));
+  return snapshot.docs.map((doc) => doc.data() as Mission);
 }
 
 export async function getUserMissions(userId: string): Promise<UserMission[]> {
@@ -48,11 +48,14 @@ export async function startUserMission(
   const docRef = doc(db, USER_MISSIONS_COLLECTION, docId);
 
   const userMission: UserMission = {
+    id: docId,
     userId,
     missionId,
     progress: 0,
     completed: false,
+    claimed: false,
     startedAt: Date.now(),
+    updatedAt: Date.now(),
   };
 
   await setDoc(docRef, userMission);
@@ -67,8 +70,14 @@ export async function updateMissionProgress(
   const docId = `${userId}_${missionId}`;
   const docRef = doc(db, USER_MISSIONS_COLLECTION, docId);
 
-  await updateDoc(docRef, { progress });
-  console.log(`Mission progress updated: ${docId} -> ${progress}`);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) {
+    console.log(`⚠️ Mission ${docId} not started, starting it now`);
+    await startUserMission(userId, missionId);
+  }
+
+  await updateDoc(docRef, { progress, updatedAt: Date.now() });
+  console.log(`✅ Mission progress updated: ${docId} -> ${progress}`);
 }
 
 export async function completeMission(
@@ -107,4 +116,23 @@ export async function createBadge(badge: Omit<Badge, "id">): Promise<string> {
   await setDoc(docRef, badge);
   console.log("Badge created:", docRef.id);
   return docRef.id;
+}
+
+export async function updateMissionProgressAfterGame(
+  userId: string,
+  data: {
+    mode: 'solo' | 'battle';
+    correctAnswers: number;
+    topic?: string;
+    won?: boolean;
+  }
+): Promise<void> {
+  try {
+    console.log('🎯 Updating mission progress for user:', userId, data);
+    
+    console.log('🎯 Mission updates after game - feature coming soon');
+  } catch (error) {
+    console.error('❌ Error updating mission progress:', error);
+    throw error;
+  }
 }
