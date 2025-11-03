@@ -9,6 +9,7 @@ import {
   Animated,
   Easing,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -34,6 +35,9 @@ export default function HomeScreen() {
   const { profile } = useUserProfile();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const isSmallScreen = windowWidth < 375;
+  const isMediumScreen = windowWidth >= 375 && windowWidth < 768;
 
   const xpAnim = useRef(new Animated.Value(0)).current;
   const particleAnims = useMemo(
@@ -271,7 +275,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#1f2937",
+    borderBottomColor: Colors.border,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -281,7 +285,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 8,
-    backgroundColor: "#22d3ee",
+    backgroundColor: Colors.secondary,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -296,9 +300,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 8,
-    backgroundColor: "#111827",
+    backgroundColor: Colors.surfaceLight,
     borderWidth: 1,
-    borderColor: "#374151",
+    borderColor: Colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -307,7 +311,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: "#22d3ee",
+    borderColor: Colors.secondary,
   },
 
   centerGreeting: { alignItems: "center", marginTop: 8 },
@@ -317,25 +321,25 @@ const styles = StyleSheet.create({
   subtitle: { color: Colors.textSecondary, fontSize: 14 },
 
   levelCard: {
-    backgroundColor: "#0b0f14",
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#1f2937",
+    borderColor: Colors.border,
   },
   levelHeaderRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
-  levelTitle: { color: "#22d3ee", fontSize: 16, fontWeight: "700" as const },
+  levelTitle: { color: Colors.primary, fontSize: 16, fontWeight: "700" as const },
   levelSub: { color: "#9CA3AF", fontSize: 12 },
   xpRight: { alignItems: "flex-end" },
-  xpValue: { color: "#34d399", fontSize: 22, fontWeight: "800" as const },
+  xpValue: { color: Colors.primary, fontSize: 22, fontWeight: "800" as const },
   xpLabel: { color: "#9CA3AF", fontSize: 12 },
-  progressTrack: { height: 12, backgroundColor: "#111827", borderRadius: 999, overflow: "hidden" },
+  progressTrack: { height: 12, backgroundColor: Colors.surfaceLight, borderRadius: 999, overflow: "hidden" },
   progressFill: {
     position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: "#22d3ee",
+    backgroundColor: Colors.primary,
     borderRadius: 999,
   },
   progressLabels: { flexDirection: "row", justifyContent: "space-between", marginTop: 6 },
@@ -343,11 +347,11 @@ const styles = StyleSheet.create({
 
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   tile: {
-    backgroundColor: "#0b0f14",
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#1f2937",
+    borderColor: Colors.border,
     width: "48%",
   },
   tileIcon: {
@@ -362,13 +366,13 @@ const styles = StyleSheet.create({
   tileSub: { color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
 
   section: {
-    backgroundColor: "#0b0f14",
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#1f2937",
+    borderColor: Colors.border,
   },
-  sectionTitle: { color: "#22d3ee", fontSize: 16, fontWeight: "700" as const, marginBottom: 12 },
+  sectionTitle: { color: Colors.primary, fontSize: 16, fontWeight: "700" as const, marginBottom: 12 },
   statsRow3: { flexDirection: "row", justifyContent: "space-between" },
   statBox: { alignItems: "center", flex: 1 },
   statNumber: { fontSize: 22, fontWeight: "800" as const },

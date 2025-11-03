@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
   Alert,
   Animated,
-  Dimensions,
+  useWindowDimensions,
+  Platform,
 } from "react-native";
 import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,6 +16,7 @@ import Colors from "@/constants/colors";
 import GlowingCard from "@/components/GlowingCard";
 import AIMentor from "@/components/AIMentor";
 import GradientButton from "@/components/GradientButton";
+import AIGeneratingLoader from "@/components/AIGeneratingLoader";
 import { QuizQuestion, generateQuestionsWithChatGPT } from "@/lib/gemini";
 import { saveMinimalQuestion, getOfflineQuestions } from "@/services/question.service";
 import { useUserProfile } from "@/contexts/UserProfileContext";
@@ -24,7 +25,6 @@ import { QUIZ_TOPICS } from "@/constants/topics";
 import { useI18n } from "@/contexts/I18nContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { Platform } from "react-native";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import Svg, { Circle } from "react-native-svg";
 
@@ -38,7 +38,7 @@ export default function QuizPlayScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { language } = useI18n();
-  
+  const { width: windowWidth } = useWindowDimensions();
 
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
@@ -53,7 +53,6 @@ export default function QuizPlayScreen() {
   const slideX = useRef(new Animated.Value(0)).current;
   const shakeX = useRef(new Animated.Value(0)).current;
   const [flashColor, setFlashColor] = useState<string | null>(null);
-  const containerWidth = Dimensions.get("window").width;
 
   const topicData = QUIZ_TOPICS.find((t) => t.id === topic);
 
@@ -216,7 +215,7 @@ export default function QuizPlayScreen() {
 
   const handleNext = () => {
     Animated.timing(slideX, {
-      toValue: -containerWidth,
+      toValue: -windowWidth,
       duration: 220,
       useNativeDriver: true,
     }).start(() => {
@@ -225,7 +224,7 @@ export default function QuizPlayScreen() {
         setSelectedAnswer(null);
         setAnswered(false);
         setTimeLeft(TIME_PER_QUESTION);
-        slideX.setValue(containerWidth);
+        slideX.setValue(windowWidth);
         Animated.timing(slideX, {
           toValue: 0,
           duration: 220,
@@ -311,15 +310,10 @@ export default function QuizPlayScreen() {
     return (
       <View style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
-        <LinearGradient
-          colors={[Colors.background, Colors.surface]}
-          style={styles.gradient}
-        >
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>Generating AI questions...</Text>
-          </View>
-        </LinearGradient>
+        <AIGeneratingLoader 
+          message="Generating AI Questions..."
+          subMessage={`Creating ${QUESTIONS_PER_QUIZ} personalized ${topicData?.name ?? "quiz"} questions`}
+        />
       </View>
     );
   }
@@ -346,6 +340,7 @@ export default function QuizPlayScreen() {
   const ringRadius = 28;
   const circumference = 2 * Math.PI * ringRadius;
   const dashOffset = circumference * (1 - timeLeft / TIME_PER_QUESTION);
+  const isSmallScreen = windowWidth < 375;
 
   return (
     <View style={styles.container}>
@@ -354,7 +349,7 @@ export default function QuizPlayScreen() {
         colors={[Colors.background, Colors.surface]}
         style={styles.gradient}
       >
-        <View style={[styles.content, { paddingTop: insets.top + 20 }]} testID="solo-quiz-screen">
+        <View style={[styles.content, { paddingTop: insets.top + 20, paddingHorizontal: isSmallScreen ? 12 : 20 }]} testID="solo-quiz-screen">
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.closeButton}
@@ -512,7 +507,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 20,
   },
   header: {
     flexDirection: "row",
@@ -585,14 +579,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   questionCard: {
-    padding: 24,
-    marginBottom: 24,
+    padding: 20,
+    marginBottom: 20,
   },
   questionText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700" as const,
     color: Colors.text,
-    lineHeight: 28,
+    lineHeight: 26,
   },
   optionsContainer: {
     gap: 12,

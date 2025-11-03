@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
   Animated,
   Image,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -21,6 +21,7 @@ import {
   Zap,
 } from "lucide-react-native";
 import Colors from "@/constants/colors";
+import AIGeneratingLoader from "@/components/AIGeneratingLoader";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   subscribeToBattleRoom,
@@ -345,9 +346,11 @@ export default function BattleRoomScreen() {
         </View>
 
         {generatingQuestions && (
-          <View style={styles.generatingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.generatingText}>Generating AI questions...</Text>
+          <View style={styles.generatingOverlay}>
+            <AIGeneratingLoader 
+              message="Generating Battle Questions..."
+              subMessage="Preparing 10 challenging questions for the battle"
+            />
           </View>
         )}
       </View>
@@ -398,7 +401,14 @@ export default function BattleRoomScreen() {
               style={styles.startButtonGradient}
             >
               {generatingQuestions ? (
-                <ActivityIndicator color={canStart ? "#000" : Colors.textSecondary} />
+                <Text
+                  style={[
+                    styles.startButtonText,
+                    !canStart && styles.startButtonTextDisabled,
+                  ]}
+                >
+                  Generating...
+                </Text>
               ) : (
                 <>
                   <Zap size={24} color={canStart ? "#000" : Colors.textSecondary} />
@@ -578,15 +588,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
   },
-  generatingContainer: {
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 24,
-  },
-  generatingText: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: "600" as const,
+  generatingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: Colors.background,
+    zIndex: 1000,
   },
   footer: {
     padding: 16,
