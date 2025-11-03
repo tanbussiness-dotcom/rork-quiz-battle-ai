@@ -15,6 +15,37 @@ import { getUserProfile } from "@/services/user.service";
 const ROOMS_PATH = "battle_rooms";
 const RESULTS_PATH = "battle_results";
 
+function clampPlayersCount(n: number | undefined): number {
+  const v = typeof n === "number" && Number.isFinite(n) ? n : 2;
+  return Math.min(4, Math.max(2, Math.floor(v)));
+}
+
+function sanitizeRoomDraft(draft: Omit<BattleRoom, "id"> & { id?: string }): Omit<BattleRoom, "id"> {
+  const name = (draft.name ?? "").toString().slice(0, 80).trim() || "Room";
+  const topic = (draft.topic ?? "").toString().slice(0, 40).trim() || "general";
+  const difficulty = (draft.difficulty ?? "medium").toString();
+  const maxPlayers = clampPlayersCount(draft.maxPlayers as number);
+  const players = Array.isArray(draft.players) ? draft.players : [];
+  return {
+    hostId: draft.hostId,
+    hostName: draft.hostName,
+    name,
+    password: draft.password,
+    isPublic: !draft.password,
+    topic,
+    difficulty,
+    maxPlayers,
+    currentPlayers: players.length,
+    players,
+    status: draft.status ?? "waiting",
+    currentQuestionIndex: 0,
+    questions: [],
+    createdAt: Date.now(),
+    startedAt: draft.startedAt,
+    endedAt: draft.endedAt,
+  } as Omit<BattleRoom, "id">;
+}
+
 export async function createBattleRoom(
   hostId: string,
   hostName: string,
@@ -29,8 +60,7 @@ export async function createBattleRoom(
   const roomRef = push(ref(realtimeDb, ROOMS_PATH));
   const roomId = roomRef.key!;
 
-  const room: BattleRoom = {
-    id: roomId,
+  const roomDraft = sanitizeRoomDraft({
     hostId,
     hostName,
     name: roomData.name,
@@ -54,7 +84,9 @@ export async function createBattleRoom(
     currentQuestionIndex: 0,
     questions: [],
     createdAt: Date.now(),
-  };
+  });
+
+  const room: BattleRoom = { id: roomId, ...roomDraft } as BattleRoom;
 
   await set(roomRef, room);
   console.log("Battle room created:", roomId);
@@ -88,6 +120,11 @@ export async function joinBattleRoom(
     throw new Error("Game already started");
   }
 
+  if (room.players.some((p) => p.uid === userId)) {
+    console.log(`Player ${userId} already in room ${roomId}`);
+    return;
+  }
+
   const newPlayer: BattlePlayer = {
     uid: userId,
     displayName,
@@ -97,9 +134,11 @@ export async function joinBattleRoom(
     joinedAt: Date.now(),
   };
 
+  const updatedPlayers = [...room.players, newPlayer];
+
   await update(roomRef, {
-    players: [...room.players, newPlayer],
-    currentPlayers: room.currentPlayers + 1,
+    players: updatedPlayers,
+    currentPlayers: updatedPlayers.length,
   });
 
   console.log(`Player ${userId} joined room ${roomId}`);
@@ -148,7 +187,7 @@ export async function setPlayerReady(
     p.uid === userId ? { ...p, isReady: ready } : p
   );
 
-  await update(roomRef, { players: updatedPlayers });
+  await update(roomRef, { players: updatedPlayers, currentPlayers: updatedPlayers.length });
   console.log(`Player ${userId} ready status: ${ready}`);
 }
 
@@ -189,7 +228,7 @@ export async function submitBattleAnswer(
     return p;
   });
 
-  await update(roomRef, { players: updatedPlayers });
+  await update(roomRef, { players: updatedPlayers, currentPlayers: updatedPlayers.length });
   console.log(`Answer submitted for player ${userId} in room ${roomId}`);
 }
 
@@ -290,11 +329,38 @@ export function subscribeToBattleRoom(
 
   const unsubscribe = onValue(roomRef, (snapshot) => {
     if (snapshot.exists()) {
-      callback(snapshot.val() as BattleRoom);
+      const room = snapshot.val() as BattleRoom;
+      const currentPlayers = Array.isArray(room.players) ? room.players.length : 0;
+      if (room.currentPlayers !== currentPlayers) {
+        update(roomRef, { currentPlayers });
+      }
+      callback(room);
     } else {
       callback(null);
     }
   });
 
   return () => off(roomRef, "value", unsubscribe);
+}
+
+export async function addBotOpponent(roomId: string): Promise<void> {
+  const roomRef = ref(realtimeDb, `${ROOMS_PATH}/${roomId}`);
+  const snapshot = await get(roomRef);
+  if (!snapshot.exists()) throw new Error("Room not found");
+  const room = snapshot.val() as BattleRoom;
+  if (room.status !== "waiting") return;
+  if (room.currentPlayers >= room.maxPlayers) return;
+  const botId = `bot_${roomId}`;
+  if (room.players.some((p) => p.uid === botId)) return;
+  const botPlayer: BattlePlayer = {
+    uid: botId,
+    displayName: "AI Bot",
+    score: 0,
+    answers: [],
+    isReady: true,
+    joinedAt: Date.now(),
+  };
+  const players = [...room.players, botPlayer];
+  await update(roomRef, { players, currentPlayers: players.length });
+  console.log("AI Bot joined room:", roomId);
 }

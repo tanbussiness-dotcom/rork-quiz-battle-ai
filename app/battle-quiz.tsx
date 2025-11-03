@@ -329,6 +329,11 @@ export default function BattleQuizScreen() {
       const winnerId = scores[sortedPlayers[0]] === scores[sortedPlayers[1]] ? null : sortedPlayers[0];
 
       await setMatchResult(roomId as string, { winnerId, scores });
+      try {
+        await (await import("@/lib/trpc")).trpcClient.matches.evaluateResults.mutate({ roomId: roomId as string, topic: room?.topic });
+      } catch (e) {
+        console.error("Failed to evaluate battle results:", e);
+      }
       setShowResultModal(true);
     } else {
       await setCurrentQuestionIndex(roomId as string, nextIndex);

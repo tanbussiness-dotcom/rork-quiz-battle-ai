@@ -27,6 +27,7 @@ import {
   leaveBattleRoom,
   setPlayerReady,
   startBattle,
+  addBotOpponent,
 } from "@/services/battle.service";
 import { initMatchNode } from "@/services/match.service";
 import type { BattleRoom } from "@/models";
@@ -162,6 +163,26 @@ export default function BattleRoomScreen() {
 
     return unsubscribe;
   }, [roomId]);
+
+  useEffect(() => {
+    if (!room || !user) return;
+    const isHost = room.hostId === user.uid;
+    if (!isHost) return;
+    if (room.status !== "waiting") return;
+    if (room.currentPlayers !== 1) return;
+    const t = setTimeout(async () => {
+      try {
+        const latest = room; // basic guard; subscribe will refresh
+        if (latest.currentPlayers === 1 && latest.status === "waiting") {
+          console.log("No opponent joined in 5s, adding AI bot...");
+          await addBotOpponent(latest.id);
+        }
+      } catch (e) {
+        console.error("Failed to add AI bot:", e);
+      }
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [room?.id, room?.currentPlayers, room?.status, user?.uid]);
 
   const handleLeave = async () => {
     if (!user || !roomId) return;
