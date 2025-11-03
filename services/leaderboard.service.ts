@@ -30,6 +30,7 @@ export async function getLeaderboard(
 
   const snapshot = await getDocs(q);
   const entries = snapshot.docs.map((doc) => ({
+    id: doc.id,
     ...doc.data(),
   })) as LeaderboardEntry[];
 
