@@ -16,9 +16,8 @@ import Colors from "@/constants/colors";
 import GlowingCard from "@/components/GlowingCard";
 import AIMentor from "@/components/AIMentor";
 import GradientButton from "@/components/GradientButton";
-import { QuizQuestion } from "@/lib/gemini";
+import { QuizQuestion, generateQuestionsWithChatGPT } from "@/lib/gemini";
 import { saveMinimalQuestion, getOfflineQuestions } from "@/services/question.service";
-import { trpc } from "@/lib/trpc";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { QUIZ_TOPICS } from "@/constants/topics";
 import { useI18n } from "@/contexts/I18nContext";
@@ -37,7 +36,7 @@ export default function QuizPlayScreen() {
   const { profile, updateProfile, incrementScore } = useUserProfile();
   const insets = useSafeAreaInsets();
   const { language } = useI18n();
-  const generateQuestionMutation = trpc.questions.generate.useMutation();
+  
 
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
@@ -105,40 +104,22 @@ export default function QuizPlayScreen() {
       }
       
       const chosenDifficulty = (typeof difficulty === "string" && difficulty.length > 0)
-        ? difficulty.toLowerCase() as "easy" | "medium" | "hard" | "challenge"
-        : "medium";
-      
-      console.log("🔍 [Quiz] Generating", QUESTIONS_PER_QUIZ, "questions online...");
-      
-      const generatedQuestions: QuizQuestion[] = [];
-      for (let i = 0; i < QUESTIONS_PER_QUIZ; i++) {
-        console.log(`🔍 [Quiz] Generating question ${i + 1}/${QUESTIONS_PER_QUIZ}...`);
-        
-        const result = await generateQuestionMutation.mutateAsync({
-          topic: topicData?.name || "General Knowledge",
+        ? (difficulty[0].toUpperCase() + difficulty.slice(1).toLowerCase())
+        : "Medium";
+
+      console.log("🔍 [Quiz] Generating", QUESTIONS_PER_QUIZ, "questions online via ChatGPT...");
+
+      const generatedQuestions = await generateQuestionsWithChatGPT(
+        topicData?.name || "General Knowledge",
+        QUESTIONS_PER_QUIZ,
+        {
           difficulty: chosenDifficulty,
-          language: language === "vi" ? "vi" : "en",
-        });
-        
-        console.log(`✅ [Quiz] Question ${i + 1} generated successfully`);
-        
-        let questionType: QuizQuestion["type"] = "multiple_choice";
-        if (result.type === "true_false") questionType = "true_false";
-        else if (result.type === "fill_blank") questionType = "fill_blank";
-        
-        const quizQuestion: QuizQuestion = {
-          id: result.id,
-          type: questionType,
-          question: result.content,
-          options: result.options || undefined,
-          correctAnswer: result.correctAnswer,
-          explanation: result.explanation,
-          difficulty: result.difficulty,
-          topic: result.topic,
-        };
-        generatedQuestions.push(quizQuestion);
-      }
-      
+          language: language === "vi" ? "Vietnamese" : "English",
+          timeoutMs: 10000,
+          retries: 2,
+        }
+      );
+
       console.log("✅ [Quiz] All questions generated successfully:", generatedQuestions.length);
       setQuestions(generatedQuestions);
     } catch (error: any) {
