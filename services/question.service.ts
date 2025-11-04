@@ -105,13 +105,18 @@ export async function generateQuestionWithBackend(
   difficulty: "easy" | "medium" | "hard" | "challenge",
   language: string
 ): Promise<Question> {
-  console.log("Requesting backend to generate single question", { topic, difficulty, language });
+  console.log("🔍 [Question Service] Requesting backend to generate single question", { topic, difficulty, language });
+  console.log("🔗 [Question Service] Using tRPC client (check tRPC logs for actual URL)");
   let res: any;
   try {
     res = await trpcClient.questions.generate.mutate({ topic, difficulty, language });
+    console.log("✅ [Question Service] Backend successfully generated question");
   } catch (err: any) {
     console.error("❌ [Question Service] tRPC fetch failed:", err?.message || err);
-    console.error("💡 [Question Service] Ensure EXPO_PUBLIC_TRPC_SERVER_URL points to your backend /api or /api/trpc");
+    console.error("💡 [Question Service] Troubleshooting tips:");
+    console.error("  1. Check that /api/health returns 200 OK");
+    console.error("  2. Verify GEMINI_API_KEY is set in your .env file");
+    console.error("  3. Check console logs for [tRPC Client] or [tRPC Catch-All] messages");
     throw err;
   }
   const q: Question = {

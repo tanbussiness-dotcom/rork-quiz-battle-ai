@@ -26,6 +26,12 @@ function resolveTrpcUrl(): string {
   }
 
   if (Platform.OS === "web") {
+    if (typeof window !== "undefined") {
+      const origin = window.location.origin;
+      const url = `${origin}/api/trpc`;
+      console.log("📍 [tRPC] Web resolved URL:", url, "(absolute from origin)");
+      return url;
+    }
     console.log("📍 [tRPC] Web resolved URL: /api/trpc (relative)");
     return "/api/trpc";
   }
@@ -59,22 +65,8 @@ function getCandidateBases(): string[] {
   push(process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? "");
 
   if (Platform.OS === "web" && typeof window !== "undefined") {
-    // Prefer relative same-origin first to avoid hosts returning HTML
-    push("/api/trpc");
-    push(`${window.location.origin}/api/trpc`);
-
-    const hostname = window.location.hostname;
-    if (hostname.includes('e2b.app') || hostname.includes('rorktest.dev')) {
-      const port = '8081';
-      const protocol = window.location.protocol;
-      if (hostname.includes('e2b.app')) {
-        const parts = hostname.split('-');
-        const sessionId = parts[parts.length - 2];
-        if (sessionId) {
-          push(`${protocol}//${port}-${sessionId}.e2b.app/api/trpc`);
-        }
-      }
-    }
+    const origin = window.location.origin;
+    push(`${origin}/api/trpc`);
   }
 
   const hostUri = (Constants as any)?.expoConfig?.hostUri
@@ -84,10 +76,6 @@ function getCandidateBases(): string[] {
     const host = hostUri.split("/")[0];
     push(`http://${host}/api/trpc`);
   }
-
-  push("http://127.0.0.1:3000/api/trpc");
-  push("http://localhost:3000/api/trpc");
-  push("http://localhost:8081/api/trpc");
 
   const resolved = resolveTrpcUrl();
   const idx = list.indexOf(resolved);
