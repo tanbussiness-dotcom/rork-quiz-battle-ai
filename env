@@ -15,8 +15,9 @@ EXPO_PUBLIC_RORK_API_BASE_URL=
 
 # Optional: Force tRPC base URL
 # Use full /api/trpc URL for reliability across platforms (web/native)
-# For Rork dev preview:
-EXPO_PUBLIC_TRPC_SERVER_URL=https://dev-ykrc1y8nz7vp0ke7gu29w.rorktest.dev/api/trpc
+# For Rork dev preview - LEAVE EMPTY to auto-detect
+# Setting this can cause issues with API routing
+EXPO_PUBLIC_TRPC_SERVER_URL=
 
 # Google Gemini API Configuration
 # Server-side only (backend API routes)

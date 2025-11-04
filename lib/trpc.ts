@@ -1,5 +1,5 @@
 import { createTRPCReact } from "@trpc/react-query";
-import { httpLink } from "@trpc/client";
+import { createTRPCClient, httpLink } from "@trpc/client";
 import type { AppRouter } from "@/backend/trpc/app-router";
 import superjson from "superjson";
 import { Platform } from "react-native";
@@ -65,6 +65,22 @@ function getCandidateBases(): string[] {
 
   if (Platform.OS === "web" && typeof window !== "undefined") {
     push(`${window.location.origin}/api/trpc`);
+    
+    // Check if we're on an E2B preview - extract port and try direct connection
+    const hostname = window.location.hostname;
+    if (hostname.includes('e2b.app') || hostname.includes('rorktest.dev')) {
+      // Try the backend port directly (usually 8081 for Expo web)
+      const port = '8081';
+      const protocol = window.location.protocol;
+      // Build E2B-style URL
+      if (hostname.includes('e2b.app')) {
+        const parts = hostname.split('-');
+        const sessionId = parts[parts.length - 2];
+        if (sessionId) {
+          push(`${protocol}//${port}-${sessionId}.e2b.app/api/trpc`);
+        }
+      }
+    }
   }
 
   const hostUri = (Constants as any)?.expoConfig?.hostUri
@@ -97,7 +113,8 @@ function buildUrlForBase(base: string, originalUrl: string): string {
   return `${normalizedBase}${suffix}`;
 }
 
-export const trpcClient = trpc.createClient({
+// React Query client for use in React components
+export const trpcReactClient = trpc.createClient({
   links: [
     httpLink({
       url: activeTrpcBase,
@@ -142,8 +159,62 @@ export const trpcClient = trpc.createClient({
           }
         }
 
-        console.error("🔗 [tRPC] Tried candidates:", getCandidateBases());
+        console.error("🔗 [tRPC] Tried candidates:", getCandidateBases().join(","));
         console.error("💡 [tRPC] Tip: set EXPO_PUBLIC_TRPC_SERVER_URL to your backend base or full /api/trpc URL");
+        throw lastErr ?? new Error("tRPC fetch failed");
+      },
+    }),
+  ],
+});
+
+// Vanilla tRPC client for use in services (non-React code)
+export const trpcClient = createTRPCClient<AppRouter>({
+  links: [
+    httpLink({
+      url: activeTrpcBase,
+      transformer: superjson,
+      fetch: async (url, options) => {
+        const urlStr: string = typeof url === "string" ? url : (url as any)?.toString?.() ?? String(url);
+        const candidates = getCandidateBases();
+        let lastErr: any = null;
+
+        for (const base of candidates) {
+          const target = buildUrlForBase(base, urlStr);
+          console.log("🔍 [tRPC Client] Trying:", target);
+          try {
+            const res = await fetch(target, options);
+            const ct = res.headers.get("content-type") ?? "";
+            console.log("🔍 [tRPC Client] Status:", res.status, "CT:", ct);
+
+            if (!res.ok) {
+              const bodyText = await res.text();
+              console.error("❌ [tRPC Client] HTTP", res.status, bodyText.slice(0, 500));
+              lastErr = new Error(`HTTP ${res.status}: ${bodyText.slice(0, 120)}`);
+              continue;
+            }
+
+            if (!ct.includes("application/json")) {
+              const bodyText = await res.text();
+              console.error("❌ [tRPC Client] Expected JSON but got:", ct);
+              console.error("❌ [tRPC Client] Body:", bodyText.slice(0, 500));
+              lastErr = new Error(`Expected JSON but got ${ct || "unknown"}`);
+              continue;
+            }
+
+            if (base !== activeTrpcBase) {
+              console.warn("✅ [tRPC Client] Switched active base to:", base);
+              activeTrpcBase = base;
+            }
+
+            return res;
+          } catch (err: any) {
+            lastErr = err;
+            console.error("❌ [tRPC Client] Fetch error on", base, "=>", err?.message || err);
+          }
+        }
+
+        console.error("🔗 [tRPC Client] Tried all candidates without success");
+        console.error("💡 [tRPC Client] Tip: set EXPO_PUBLIC_TRPC_SERVER_URL to your backend base or full /api/trpc URL");
         throw lastErr ?? new Error("tRPC fetch failed");
       },
     }),
