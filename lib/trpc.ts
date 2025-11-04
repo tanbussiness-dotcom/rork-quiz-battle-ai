@@ -48,42 +48,102 @@ function resolveTrpcUrl(): string {
   return "http://localhost:8081/api/trpc";
 }
 
-const trpcUrl = resolveTrpcUrl();
-console.log("🔗 [tRPC] tRPC endpoint:", trpcUrl);
+let activeTrpcBase = resolveTrpcUrl();
+console.log("🔗 [tRPC] Initial tRPC URL:", activeTrpcBase);
+
+function getCandidateBases(): string[] {
+  const list: string[] = [];
+  const push = (u?: string | null) => {
+    if (!u) return;
+    const cleaned = u.replace(/\/$/, "");
+    if (!list.includes(cleaned)) list.push(cleaned);
+  };
+
+  push(process.env.EXPO_PUBLIC_TRPC_SERVER_URL ?? "");
+  push(process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? "");
+
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    push(`${window.location.origin}/api/trpc`);
+  }
+
+  const hostUri = (Constants as any)?.expoConfig?.hostUri
+    || (Constants as any)?.manifest2?.extra?.expoClient?.hostUri
+    || (Constants as any)?.manifest?.debuggerHost;
+  if (typeof hostUri === "string" && hostUri.length > 0) {
+    const host = hostUri.split("/")[0];
+    push(`http://${host}/api/trpc`);
+  }
+
+  push("http://127.0.0.1:3000/api/trpc");
+  push("http://localhost:3000/api/trpc");
+
+  // Ensure the resolved URL is first
+  const resolved = resolveTrpcUrl();
+  const idx = list.indexOf(resolved);
+  if (idx > 0) {
+    list.splice(idx, 1);
+    list.unshift(resolved);
+  } else if (idx === -1) {
+    list.unshift(resolved);
+  }
+
+  return list;
+}
+
+function buildUrlForBase(base: string, originalUrl: string): string {
+  const i = originalUrl.indexOf("/trpc");
+  const suffix = i >= 0 ? originalUrl.substring(i + "/trpc".length) : "";
+  return `${base}${suffix}`;
+}
 
 export const trpcClient = trpc.createClient({
   links: [
     httpLink({
-      url: trpcUrl,
+      url: activeTrpcBase,
       transformer: superjson,
       fetch: async (url, options) => {
-        console.log("🔍 [tRPC] Fetch:", url);
-        try {
-          const res = await fetch(url, options);
-          const ct = res.headers.get("content-type") ?? "";
-          console.log("🔍 [tRPC] Status:", res.status, "CT:", ct);
+        const urlStr: string = typeof url === "string" ? url : (url as any)?.toString?.() ?? String(url);
+        const candidates = getCandidateBases();
+        let lastErr: any = null;
 
-          if (!res.ok) {
-            const bodyText = await res.text();
-            console.error("❌ [tRPC] HTTP", res.status, bodyText.slice(0, 500));
-            throw new Error(`HTTP ${res.status}: ${bodyText.slice(0, 120)}`);
+        for (const base of candidates) {
+          const target = buildUrlForBase(base, urlStr);
+          console.log("🔍 [tRPC] Trying:", target);
+          try {
+            const res = await fetch(target, options);
+            const ct = res.headers.get("content-type") ?? "";
+            console.log("🔍 [tRPC] Status:", res.status, "CT:", ct, "for", base);
+
+            if (!res.ok) {
+              const bodyText = await res.text();
+              console.error("❌ [tRPC] HTTP", res.status, bodyText.slice(0, 500));
+              lastErr = new Error(`HTTP ${res.status}: ${bodyText.slice(0, 120)}`);
+              continue;
+            }
+
+            if (!ct.includes("application/json")) {
+              const bodyText = await res.text();
+              console.error("❌ [tRPC] Expected JSON but got:", ct);
+              console.error("❌ [tRPC] Body:", bodyText.slice(0, 500));
+              lastErr = new Error(`Expected JSON but got ${ct || "unknown"}`);
+              continue;
+            }
+
+            if (base !== activeTrpcBase) {
+              console.warn("✅ [tRPC] Switched active base to:", base);
+              activeTrpcBase = base;
+            }
+
+            return res;
+          } catch (err: any) {
+            lastErr = err;
+            console.error("❌ [tRPC] Fetch error on", base, "=>", err?.message || err);
           }
-
-          if (!ct.includes("application/json")) {
-            const bodyText = await res.text();
-            console.error("❌ [tRPC] Expected JSON but got:", ct);
-            console.error("❌ [tRPC] Body:", bodyText.slice(0, 500));
-            throw new Error(`Expected JSON but got ${ct || "unknown"}`);
-          }
-
-          return res;
-        } catch (err: any) {
-          console.error("❌ [tRPC] Fetch error:", err?.message || err);
-          console.error("🔗 [tRPC] Endpoint was:", url);
-          console.error("🔗 [tRPC] Configured tRPC URL:", trpcUrl);
-          console.error("💡 [tRPC] Tip: set EXPO_PUBLIC_TRPC_SERVER_URL to your backend base or full /api/trpc URL");
-          throw err;
         }
+
+        console.error("🔗 [tRPC] Tried candidates:", getCandidateBases());
+        console.error("💡 [tRPC] Tip: set EXPO_PUBLIC_TRPC_SERVER_URL to your backend base or full /api/trpc URL");
+        throw lastErr ?? new Error("tRPC fetch failed");
       },
     }),
   ],
