@@ -9,14 +9,12 @@ EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
 EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
 
 # Backend API URL (automatically set by Rork platform)
-# Leave empty for web (uses window.location.origin)
-# Set this for native mobile apps to point to your development server
+# Leave empty for auto-detection. The Rork platform will automatically
+# inject this variable when your backend is deployed.
 EXPO_PUBLIC_RORK_API_BASE_URL=
 
 # Optional: Force tRPC base URL
-# Use full /api/trpc URL for reliability across platforms (web/native)
-# For Rork dev preview - LEAVE EMPTY to auto-detect
-# Setting this can cause issues with API routing
+# On Rork platform, this should be empty to use EXPO_PUBLIC_RORK_API_BASE_URL
 EXPO_PUBLIC_TRPC_SERVER_URL=
 
 # Google Gemini API Configuration

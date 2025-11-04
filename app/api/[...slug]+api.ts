@@ -1,11 +1,13 @@
-import app from "@/backend/hono";
-
-console.log("🚀 [API Route] Loaded: app/api/[...slug]+api.ts");
+console.log("🚀🚀🚀 [API Route] =================== LOADING app/api/[...slug]+api.ts ===================");
+console.log("🚀 [API Route] Timestamp:", new Date().toISOString());
 console.log("🚀 [API Route] Environment:", {
   NODE_ENV: process.env.NODE_ENV,
   hasGemini: !!process.env.GEMINI_API_KEY,
 });
-console.log("✅ [API Route] Hono app loaded successfully");
+
+import app from "@/backend/hono";
+
+console.log("✅ [API Route] Hono app imported successfully");
 
 async function handleApiRequest(request: Request): Promise<Response> {
   console.log("📥 [API Route] " + request.method + " " + request.url);
@@ -33,7 +35,18 @@ async function handleApiRequest(request: Request): Promise<Response> {
     
     console.log("🔗 [API Route] Hono Request URL:", honoRequest.url);
     const response = await app.fetch(honoRequest);
-    console.log("✅ [API Route] Response:", response.status, response.headers.get("content-type"));
+    const contentType = response.headers.get("content-type");
+    console.log("✅ [API Route] Response:", response.status, "Content-Type:", contentType);
+    
+    if (!contentType || !contentType.includes("application/json")) {
+      const text = await response.text();
+      console.error("⚠️ [API Route] Response is not JSON. Body preview:", text.slice(0, 200));
+      return new Response(text, {
+        status: response.status,
+        headers: response.headers,
+      });
+    }
+    
     return response;
   } catch (error: any) {
     console.error("❌ [API Route] Error:", error.message);

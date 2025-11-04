@@ -26,13 +26,7 @@ function resolveTrpcUrl(): string {
   }
 
   if (Platform.OS === "web") {
-    if (typeof window !== "undefined") {
-      const origin = window.location.origin;
-      const url = `${origin}/api/trpc`;
-      console.log("📍 [tRPC] Web resolved URL:", url, "(absolute from origin)");
-      return url;
-    }
-    console.log("📍 [tRPC] Web resolved URL: /api/trpc (relative)");
+    console.log("📍 [tRPC] Web resolved URL: /api/trpc (relative for same-origin)");
     return "/api/trpc";
   }
 
@@ -40,7 +34,7 @@ function resolveTrpcUrl(): string {
     || (Constants as any)?.manifest2?.extra?.expoClient?.hostUri
     || (Constants as any)?.manifest?.debuggerHost;
   if (typeof hostUri === "string" && hostUri.length > 0) {
-    const host = hostUri.split("/")[0]; // e.g. 192.168.1.10:8081
+    const host = hostUri.split("/")[0];
     const url = `http://${host}/api/trpc`;
     console.warn("ℹ️ [tRPC] Derived URL from Expo hostUri:", url);
     return url;
@@ -53,6 +47,26 @@ function resolveTrpcUrl(): string {
 let activeTrpcBase = resolveTrpcUrl();
 console.log("🔗 [tRPC] Initial tRPC URL:", activeTrpcBase);
 
+if (Platform.OS === "web" && typeof window !== "undefined") {
+  (async () => {
+    try {
+      const healthCheck = await fetch("/api/health");
+      const ct = healthCheck.headers.get("content-type") ?? "";
+      console.log("🏝️ [tRPC Health] /api/health status:", healthCheck.status, "CT:", ct);
+      if (healthCheck.ok && ct.includes("application/json")) {
+        const data = await healthCheck.json();
+        console.log("✅ [tRPC Health] API routes are working:", data);
+      } else {
+        const text = await healthCheck.text();
+        console.error("❌ [tRPC Health] API routes not working. Response:", text.slice(0, 200));
+        console.error("❌ [tRPC Health] This likely means Expo API routes are not configured on this platform");
+      }
+    } catch (err: any) {
+      console.error("❌ [tRPC Health] Failed to check /api/health:", err?.message || err);
+    }
+  })();
+}
+
 function getCandidateBases(): string[] {
   const list: string[] = [];
   const push = (u?: string | null) => {
@@ -64,17 +78,16 @@ function getCandidateBases(): string[] {
   push(process.env.EXPO_PUBLIC_TRPC_SERVER_URL ?? "");
   push(process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? "");
 
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    const origin = window.location.origin;
-    push(`${origin}/api/trpc`);
-  }
-
-  const hostUri = (Constants as any)?.expoConfig?.hostUri
-    || (Constants as any)?.manifest2?.extra?.expoClient?.hostUri
-    || (Constants as any)?.manifest?.debuggerHost;
-  if (typeof hostUri === "string" && hostUri.length > 0) {
-    const host = hostUri.split("/")[0];
-    push(`http://${host}/api/trpc`);
+  if (Platform.OS === "web") {
+    push("/api/trpc");
+  } else {
+    const hostUri = (Constants as any)?.expoConfig?.hostUri
+      || (Constants as any)?.manifest2?.extra?.expoClient?.hostUri
+      || (Constants as any)?.manifest?.debuggerHost;
+    if (typeof hostUri === "string" && hostUri.length > 0) {
+      const host = hostUri.split("/")[0];
+      push(`http://${host}/api/trpc`);
+    }
   }
 
   const resolved = resolveTrpcUrl();
