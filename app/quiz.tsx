@@ -124,12 +124,44 @@ export default function QuizPlayScreen() {
 
       console.log("🔍 [Quiz] Generating", QUESTIONS_PER_QUIZ, "questions online via backend...");
 
-      const generated = await generateAndStoreQuestions({
-        topic: topicData?.name || "General Knowledge",
-        count: QUESTIONS_PER_QUIZ,
-        difficulty: chosenDifficulty as "Easy" | "Medium" | "Hard" | "Challenge",
-        language: language === "vi" ? "Vietnamese" : "English",
-      });
+      let generated: any[];
+      try {
+        generated = await generateAndStoreQuestions({
+          topic: topicData?.name || "General Knowledge",
+          count: QUESTIONS_PER_QUIZ,
+          difficulty: chosenDifficulty as "Easy" | "Medium" | "Hard" | "Challenge",
+          language: language === "vi" ? "Vietnamese" : "English",
+        });
+      } catch (backendError: any) {
+        console.error("❌ [Quiz] Backend generation completely failed, using mock questions", backendError);
+        
+        const { getMockQuestions } = await import("@/lib/gemini");
+        const mockQuestions = getMockQuestions(topicData?.name || "General Knowledge", QUESTIONS_PER_QUIZ);
+        
+        const mappedMock: any[] = mockQuestions.map(q => ({
+          id: q.id,
+          type: q.type,
+          content: q.question,
+          options: q.options,
+          correctAnswer: Array.isArray(q.correctAnswer) ? q.correctAnswer[0] : q.correctAnswer,
+          explanation: q.explanation,
+          difficulty: q.difficulty,
+          topic: q.topic,
+          source: "mock",
+          createdByAI: false,
+          timeLimit: 30,
+          createdAt: Date.now(),
+          language: language === "vi" ? "Vietnamese" : "English",
+        }));
+        
+        generated = mappedMock;
+        
+        Alert.alert(
+          "Using Sample Questions",
+          "Could not connect to AI service. Playing with sample questions instead.",
+          [{ text: "OK" }]
+        );
+      }
       
       const generatedQuestions: QuizQuestion[] = generated.map(q => ({
         id: q.id,

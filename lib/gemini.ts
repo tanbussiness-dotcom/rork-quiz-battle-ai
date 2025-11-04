@@ -84,9 +84,11 @@ export async function callGemini(prompt: string, timeoutMs: number = 15000): Pro
   
   if (!apiKey) {
     console.error("❌ Missing GEMINI_API_KEY — please add it to your .env file.");
-    console.error("Available env keys with GEMINI:", Object.keys(process.env).filter(k => k.includes('GEMINI')));
+    console.error("Available env keys:", Object.keys(process.env));
     throw new Error("Missing GEMINI_API_KEY — set GEMINI_API_KEY in your .env file");
   }
+  
+  console.log("✅ [callGemini] Using API key with length:", apiKey.length);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.min(timeoutMs, 15000));

@@ -24,28 +24,44 @@ const LEGACY_OFFLINE_KEY = "offline_questions_v1";
 export async function generateAndStoreQuestions(
   params: GenerateQuestionParams
 ): Promise<Question[]> {
-  console.log("Generating questions with params:", params);
+  console.log("🔍 [Question Service] Generating questions with params:", params);
 
   const { topic, difficulty, count, language } = params;
 
   const results: Question[] = [];
+  let failures = 0;
+  const maxFailures = Math.min(3, count);
 
   for (let i = 0; i < count; i++) {
     try {
+      console.log(`🔍 [Question Service] Generating question ${i + 1}/${count}...`);
       const q = await generateQuestionWithBackend(
         topic,
         (difficulty as "easy" | "medium" | "hard" | "challenge") ?? "medium",
         language ?? "en"
       );
       results.push(q);
-    } catch (e) {
-      console.log("generateAndStoreQuestions: backend generation failed", e);
-      // No fallback: enforce real OpenAI via backend; surface error
-      throw e as Error;
+      console.log(`✅ [Question Service] Successfully generated question ${i + 1}/${count}`);
+    } catch (e: any) {
+      failures++;
+      console.error(`❌ [Question Service] Failed to generate question ${i + 1}/${count}:`, e?.message || e);
+      
+      if (failures >= maxFailures) {
+        console.error(`❌ [Question Service] Too many failures (${failures}/${maxFailures}). Stopping generation.`);
+        if (results.length === 0) {
+          throw new Error(`Failed to generate any questions. ${e?.message || 'Backend error'}`);
+        }
+        break;
+      }
     }
   }
 
-  console.log(`Generated ${results.length} questions`);
+  console.log(`✅ [Question Service] Generated ${results.length} questions (${failures} failures)`);
+  
+  if (results.length === 0) {
+    throw new Error("Failed to generate any questions. Please check your internet connection and try again.");
+  }
+  
   return results;
 }
 
