@@ -3,28 +3,40 @@ import { httpLink } from "@trpc/client";
 import type { AppRouter } from "@/backend/trpc/app-router";
 import superjson from "superjson";
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 
 export const trpc = createTRPCReact<AppRouter>();
 
 function getBaseUrl(): string {
-  const envUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? "";
+  const envPreferred = process.env.EXPO_PUBLIC_TRPC_SERVER_URL ?? "";
+  const envFallback = process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? "";
+  const envUrl = envPreferred || envFallback;
   if (envUrl) {
     console.log("✅ [tRPC] Using configured API base URL:", envUrl);
-    return envUrl;
+    return envUrl.replace(/\/$/, "");
   }
-  
+
   if (Platform.OS === "web") {
     if (typeof window !== "undefined" && window.location) {
       const origin = window.location.origin;
       console.log("📍 [tRPC] Using web origin:", origin);
       return origin;
     }
-    console.warn("⚠️ [tRPC] Fallback to relative path '/api'");
+    console.warn("⚠️ [tRPC] Web without window.location, using relative '/api'");
     return "";
   }
-  
-  console.warn("⚠️ [tRPC] Native app without configured URL - using localhost");
-  return "http://localhost:3000";
+
+  const hostUri = (Constants as any)?.expoConfig?.hostUri || (Constants as any)?.manifest2?.extra?.expoClient?.hostUri || (Constants as any)?.manifest?.debuggerHost;
+  if (typeof hostUri === "string" && hostUri.length > 0) {
+    const host = hostUri.split("/")[0];
+    const hostname = host.split(":")[0];
+    const url = `http://${hostname}`;
+    console.warn("ℹ️ [tRPC] Derived base from Expo hostUri:", url);
+    return url;
+  }
+
+  console.warn("⚠️ [tRPC] Native app without configured URL - defaulting to http://localhost:8081");
+  return "http://localhost:8081";
 }
 
 const baseUrl = getBaseUrl();
@@ -62,6 +74,9 @@ export const trpcClient = trpc.createClient({
           return res;
         } catch (err: any) {
           console.error("❌ [tRPC] Fetch error:", err?.message || err);
+          console.error("🔗 [tRPC] Endpoint was:", url);
+          console.error("🔗 [tRPC] Base URL was:", trpcUrl);
+          console.error("💡 [tRPC] Tip: set EXPO_PUBLIC_TRPC_SERVER_URL to your backend base (e.g. https://your-tunnel.ngrok.io)");
           throw err;
         }
       },

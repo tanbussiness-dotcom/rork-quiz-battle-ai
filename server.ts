@@ -29,8 +29,9 @@ console.log("🚀 Starting Quiz Battle AI Backend Server...");
 console.log("📦 Environment:", process.env.NODE_ENV || "development");
 console.log("🔑 Gemini API Key:", process.env.GEMINI_API_KEY ? `✅ Configured (${process.env.GEMINI_API_KEY.substring(0, 10)}...)` : "❌ Missing");
 
-if (typeof Bun !== "undefined") {
-  Bun.serve({
+const maybeBun: any = (globalThis as any).Bun;
+if (typeof maybeBun !== "undefined" && maybeBun && typeof maybeBun.serve === "function") {
+  maybeBun.serve({
     port,
     fetch: app.fetch,
   });
@@ -41,6 +42,6 @@ if (typeof Bun !== "undefined") {
   console.log("");
   console.log("Press Ctrl+C to stop the server");
 } else {
-  console.error("❌ This server requires Bun runtime. Please run with: bun server.ts");
-  process.exit(1);
+  console.warn("��️ Bun runtime not detected. This file is optional when using Expo Router API routes.");
+  console.warn("ℹ️ Your backend is served from app/api under the Expo dev server. No action needed.");
 }
