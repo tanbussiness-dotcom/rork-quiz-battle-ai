@@ -37,19 +37,25 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 function stripFences(raw: string): string {
-  let text = raw.trim();
+  let text = raw?.toString?.() ?? "";
+  text = text.trim();
   text = text.replace(/^```json\s*([\s\S]*?)\s*```$/i, "$1");
   text = text.replace(/^```\s*([\s\S]*?)\s*```$/i, "$1");
   return text.trim();
 }
 
 export function safeParseQuestions(text: string): any[] | null {
+  if (!text || typeof text !== "string") return null;
   const cleaned = stripFences(text);
+
   try {
     const obj = JSON.parse(cleaned);
     if (Array.isArray(obj)) return obj;
-    if (obj && typeof obj === "object" && Array.isArray((obj as any).questions)) return (obj as any).questions as any[];
+    if (obj && typeof obj === "object" && Array.isArray((obj as any).questions)) {
+      return (obj as any).questions as any[];
+    }
   } catch {}
+
   const matches = cleaned.match(/(\{[\s\S]*?\}|\[[\s\S]*?\])/g);
   if (matches && matches.length) {
     const sorted = matches.sort((a, b) => b.length - a.length);
@@ -57,10 +63,13 @@ export function safeParseQuestions(text: string): any[] | null {
       try {
         const obj2 = JSON.parse(m);
         if (Array.isArray(obj2)) return obj2 as any[];
-        if (obj2 && typeof obj2 === "object" && Array.isArray((obj2 as any).questions)) return (obj2 as any).questions as any[];
+        if (obj2 && typeof obj2 === "object" && Array.isArray((obj2 as any).questions)) {
+          return (obj2 as any).questions as any[];
+        }
       } catch {}
     }
   }
+
   return null;
 }
 
