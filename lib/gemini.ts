@@ -1,5 +1,4 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getGeminiApiKey } from "@/lib/env";
 
 export interface QuizQuestion {
   id: string;
@@ -66,19 +65,18 @@ export function safeParseQuestions(text: string): any[] | null {
 }
 
 export async function callGemini(prompt: string, timeoutMs: number = 15000): Promise<string> {
-  const apiKey = getGeminiApiKey() || process.env.GEMINI_API_KEY || "";
+  const isClient = typeof window !== 'undefined';
+  
+  if (isClient) {
+    throw new Error("Gemini API calls must be made from the backend. Use tRPC procedures instead of calling this directly.");
+  }
+  
+  const apiKey = process.env.GEMINI_API_KEY || "";
   
   if (!apiKey) {
-    const isClient = typeof window !== 'undefined';
     console.error("❌ Missing GEMINI_API_KEY — please add it to your .env file.");
-    console.error("Context:", isClient ? "Client (browser/app)" : "Server (backend)");
-    
-    if (isClient) {
-      throw new Error("Gemini API calls must be made from the backend. Use tRPC procedures instead of calling this directly.");
-    } else {
-      console.error("Available env keys with GEMINI:", Object.keys(process.env).filter(k => k.includes('GEMINI')));
-      throw new Error("Missing GEMINI_API_KEY — set GEMINI_API_KEY in your .env file");
-    }
+    console.error("Available env keys with GEMINI:", Object.keys(process.env).filter(k => k.includes('GEMINI')));
+    throw new Error("Missing GEMINI_API_KEY — set GEMINI_API_KEY in your .env file");
   }
 
   const controller = new AbortController();

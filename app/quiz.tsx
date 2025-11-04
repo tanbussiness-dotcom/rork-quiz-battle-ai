@@ -17,8 +17,8 @@ import GlowingCard from "@/components/GlowingCard";
 import AIMentor from "@/components/AIMentor";
 import GradientButton from "@/components/GradientButton";
 import AIGeneratingLoader from "@/components/AIGeneratingLoader";
-import { QuizQuestion, generateQuestionsWithChatGPT } from "@/lib/gemini";
-import { saveMinimalQuestion, getOfflineQuestions } from "@/services/question.service";
+import type { QuizQuestion } from "@/lib/gemini";
+import { saveMinimalQuestion, getOfflineQuestions, generateAndStoreQuestions } from "@/services/question.service";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { QUIZ_TOPICS } from "@/constants/topics";
@@ -122,18 +122,25 @@ export default function QuizPlayScreen() {
         console.log("Adaptive difficulty read failed", e);
       }
 
-      console.log("🔍 [Quiz] Generating", QUESTIONS_PER_QUIZ, "questions online via Gemini...");
+      console.log("🔍 [Quiz] Generating", QUESTIONS_PER_QUIZ, "questions online via backend...");
 
-      const generatedQuestions = await generateQuestionsWithChatGPT(
-        topicData?.name || "General Knowledge",
-        QUESTIONS_PER_QUIZ,
-        {
-          difficulty: chosenDifficulty,
-          language: language === "vi" ? "Vietnamese" : "English",
-          timeoutMs: 12000,
-          retries: 2,
-        }
-      );
+      const generated = await generateAndStoreQuestions({
+        topic: topicData?.name || "General Knowledge",
+        count: QUESTIONS_PER_QUIZ,
+        difficulty: chosenDifficulty as "Easy" | "Medium" | "Hard" | "Challenge",
+        language: language === "vi" ? "Vietnamese" : "English",
+      });
+      
+      const generatedQuestions: QuizQuestion[] = generated.map(q => ({
+        id: q.id,
+        type: (q.type as QuizQuestion["type"]) || "multiple_choice",
+        question: q.content,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+        difficulty: q.difficulty as QuizQuestion["difficulty"],
+        topic: q.topic,
+      }));
 
       console.log("✅ [Quiz] All questions generated successfully:", generatedQuestions.length);
       setQuestions(generatedQuestions);
