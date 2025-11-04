@@ -1,4 +1,29 @@
+import { readFileSync } from "fs";
+import { resolve } from "path";
 import { generateSingleQuestion, generateQuestions, getMockQuestions } from "../lib/gemini";
+
+// Load environment variables from 'env' file if GEMINI_API_KEY not already set
+if (!process.env.GEMINI_API_KEY) {
+  try {
+    const envPath = resolve(process.cwd(), "env");
+    const envContent = readFileSync(envPath, "utf-8");
+    const lines = envContent.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith("#")) {
+        const [key, ...valueParts] = trimmed.split("=");
+        if (key && valueParts.length > 0) {
+          const value = valueParts.join("=").trim();
+          process.env[key.trim()] = value;
+        }
+      }
+    }
+    console.log("✅ Loaded environment variables from 'env' file");
+    console.log("🔑 GEMINI_API_KEY:", process.env.GEMINI_API_KEY ? `Found (${process.env.GEMINI_API_KEY.substring(0, 10)}...)` : "Not found");
+  } catch (e) {
+    console.error("⚠️  Could not load env file:", e);
+  }
+}
 
 function timestamp(): string {
   return new Date().toLocaleString();

@@ -1,10 +1,33 @@
 import app from "./backend/hono";
+import { readFileSync } from "fs";
+import { resolve } from "path";
+
+if (!process.env.GEMINI_API_KEY) {
+  try {
+    const envPath = resolve(process.cwd(), "env");
+    const envContent = readFileSync(envPath, "utf-8");
+    const lines = envContent.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith("#")) {
+        const [key, ...valueParts] = trimmed.split("=");
+        if (key && valueParts.length > 0) {
+          const value = valueParts.join("=").trim();
+          process.env[key.trim()] = value;
+        }
+      }
+    }
+    console.log("✅ Manually loaded environment variables from 'env' file");
+  } catch (e) {
+    console.error("⚠️  Could not load env file:", e);
+  }
+}
 
 const port = parseInt(process.env.PORT || "3000");
 
 console.log("🚀 Starting Quiz Battle AI Backend Server...");
 console.log("📦 Environment:", process.env.NODE_ENV || "development");
-console.log("🔑 Gemini API Key:", process.env.GEMINI_API_KEY ? "✅ Configured" : "❌ Missing");
+console.log("🔑 Gemini API Key:", process.env.GEMINI_API_KEY ? `✅ Configured (${process.env.GEMINI_API_KEY.substring(0, 10)}...)` : "❌ Missing");
 
 if (typeof Bun !== "undefined") {
   Bun.serve({
