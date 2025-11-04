@@ -78,11 +78,34 @@ export const [UserProfileProvider, useUserProfile] = createContextHook<UserProfi
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-          const data = docSnap.data();
+          const data = docSnap.data() as Record<string, unknown>;
+
+          const toDateSafe = (val: unknown): Date => {
+            try {
+              if (val == null) return new Date();
+              if (val instanceof Date) return val;
+              if (typeof val === 'number') return new Date(val);
+              if (typeof val === 'string') {
+                const d = new Date(val);
+                return isNaN(d.getTime()) ? new Date() : d;
+              }
+              if (typeof val === 'object') {
+                const anyVal = val as { toDate?: () => Date };
+                if (typeof anyVal.toDate === 'function') {
+                  const d = anyVal.toDate();
+                  return d instanceof Date ? d : new Date();
+                }
+              }
+            } catch (e) {
+              console.log('toDateSafe error', e);
+            }
+            return new Date();
+          };
+
           setProfile({
-            ...data,
-            createdAt: data.createdAt?.toDate() || new Date(),
-            lastPlayedAt: data.lastPlayedAt?.toDate() || new Date(),
+            ...(data as object),
+            createdAt: toDateSafe((data as any).createdAt),
+            lastPlayedAt: toDateSafe((data as any).lastPlayedAt),
           } as UserProfile);
         } else {
           const newProfile: UserProfile = {
