@@ -17,19 +17,21 @@ async function handleApiRequest(request: Request): Promise<Response> {
     
     const url = new URL(request.url);
     console.log("📥 [API Route] Pathname:", url.pathname);
+    console.log("📥 [API Route] Search:", url.search);
     
     let apiPath = url.pathname.replace(/^\/api/, "") || "/";
     console.log("👉 [API Route] Forwarding to Hono:", apiPath + url.search);
     
-    const honoUrl = new URL(apiPath + url.search, url.origin);
+    const honoUrl = new URL(apiPath + url.search, "http://localhost");
     
-    const honoRequest = new Request(honoUrl, {
+    const honoRequest = new Request(honoUrl.toString(), {
       method: request.method,
       headers: request.headers,
       body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined,
       duplex: request.method !== "GET" && request.method !== "HEAD" ? "half" : undefined,
     } as RequestInit);
     
+    console.log("🔗 [API Route] Hono Request URL:", honoRequest.url);
     const response = await app.fetch(honoRequest);
     console.log("✅ [API Route] Response:", response.status, response.headers.get("content-type"));
     return response;
