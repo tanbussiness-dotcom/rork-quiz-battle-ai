@@ -8,19 +8,20 @@ console.log("🚀 [API Route] Environment:", {
 console.log("✅ [API Route] Hono app loaded successfully");
 
 async function handleApiRequest(request: Request): Promise<Response> {
-  console.log("📥 [API] Request:", request.method, request.url);
+  console.log("📥 [API Route] " + request.method + " " + request.url);
   
   try {
-    const url = new URL(request.url);
-    console.log("📥 [API] Original path:", url.pathname);
-    console.log("📥 [API] Search params:", url.search);
-    console.log("📥 [API] Content-Type:", request.headers.get("content-type"));
+    if (!request.url) {
+      throw new Error("Missing request URL");
+    }
     
-    const apiPath = url.pathname.replace(/^\/api/, "") || "/";
-    console.log("📥 [API] Forwarding to Hono with path:", apiPath);
+    const url = new URL(request.url);
+    console.log("📥 [API Route] Pathname:", url.pathname);
+    
+    let apiPath = url.pathname.replace(/^\/api/, "") || "/";
+    console.log("👉 [API Route] Forwarding to Hono:", apiPath + url.search);
     
     const honoUrl = new URL(apiPath + url.search, url.origin);
-    console.log("📥 [API] Hono URL:", honoUrl.toString());
     
     const honoRequest = new Request(honoUrl, {
       method: request.method,
@@ -30,19 +31,22 @@ async function handleApiRequest(request: Request): Promise<Response> {
     } as RequestInit);
     
     const response = await app.fetch(honoRequest);
-    console.log("✅ [API] Response status:", response.status);
-    console.log("✅ [API] Response content-type:", response.headers.get("content-type"));
+    console.log("✅ [API Route] Response:", response.status, response.headers.get("content-type"));
     return response;
   } catch (error: any) {
-    console.error("❌ [API] Error:", error.message);
-    console.error("❌ [API] Error stack:", error.stack);
+    console.error("❌ [API Route] Error:", error.message);
+    console.error("❌ [API Route] Stack:", error.stack);
+    
     return new Response(
       JSON.stringify({ 
-        error: error.message, 
-        stack: error.stack,
-        note: "If you see this error repeatedly, API routes might not be working in dev mode."
+        error: "API Route Error: " + error.message,
+        path: new URL(request.url).pathname,
+        timestamp: new Date().toISOString()
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { 
+        status: 500, 
+        headers: { "Content-Type": "application/json" } 
+      }
     );
   }
 }

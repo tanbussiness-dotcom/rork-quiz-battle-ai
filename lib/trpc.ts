@@ -8,16 +8,27 @@ export const trpc = createTRPCReact<AppRouter>();
 
 function getBaseUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? "";
-  if (envUrl) return envUrl;
+  if (envUrl) {
+    console.log("✅ [tRPC] Using configured API base URL:", envUrl);
+    return envUrl;
+  }
+  
   if (Platform.OS === "web") {
-    console.warn("⚠️ Missing API base URL — fallback to '/api'");
+    if (typeof window !== "undefined" && window.location) {
+      const origin = window.location.origin;
+      console.log("📍 [tRPC] Using web origin:", origin);
+      return origin;
+    }
+    console.warn("⚠️ [tRPC] Fallback to relative path '/api'");
     return "";
   }
+  
+  console.warn("⚠️ [tRPC] Native app without configured URL - using localhost");
   return "http://localhost:3000";
 }
 
 const baseUrl = getBaseUrl();
-const apiBase = baseUrl || "/api";
+const apiBase = baseUrl ? `${baseUrl}/api` : "/api";
 const trpcUrl = `${apiBase}/trpc`;
 
 console.log("🔗 [tRPC] Using base:", apiBase);
