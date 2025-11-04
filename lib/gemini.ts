@@ -36,19 +36,30 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+function stripFences(raw: string): string {
+  let text = raw.trim();
+  text = text.replace(/^```json\s*([\s\S]*?)\s*```$/i, "$1");
+  text = text.replace(/^```\s*([\s\S]*?)\s*```$/i, "$1");
+  return text.trim();
+}
+
 export function safeParseQuestions(text: string): any[] | null {
+  const cleaned = stripFences(text);
   try {
-    const obj = JSON.parse(text);
+    const obj = JSON.parse(cleaned);
     if (Array.isArray(obj)) return obj;
-    if (Array.isArray((obj as any).questions)) return (obj as any).questions as any[];
+    if (obj && typeof obj === "object" && Array.isArray((obj as any).questions)) return (obj as any).questions as any[];
   } catch {}
-  const match = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-  if (match) {
-    try {
-      const obj2 = JSON.parse(match[0]);
-      if (Array.isArray(obj2)) return obj2 as any[];
-      if (Array.isArray((obj2 as any).questions)) return (obj2 as any).questions as any[];
-    } catch {}
+  const matches = cleaned.match(/(\{[\s\S]*?\}|\[[\s\S]*?\])/g);
+  if (matches && matches.length) {
+    const sorted = matches.sort((a, b) => b.length - a.length);
+    for (const m of sorted) {
+      try {
+        const obj2 = JSON.parse(m);
+        if (Array.isArray(obj2)) return obj2 as any[];
+        if (obj2 && typeof obj2 === "object" && Array.isArray((obj2 as any).questions)) return (obj2 as any).questions as any[];
+      } catch {}
+    }
   }
   return null;
 }
@@ -56,6 +67,7 @@ export function safeParseQuestions(text: string): any[] | null {
 export async function callGemini(prompt: string, timeoutMs: number = 15000): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? "";
   if (!apiKey) {
+    console.error("❌ Missing GEMINI_API_KEY — please add it to your .env file before running tests.");
     throw new Error("Missing GEMINI_API_KEY — set GEMINI_API_KEY in your .env");
   }
 
@@ -79,7 +91,7 @@ export async function callGemini(prompt: string, timeoutMs: number = 15000): Pro
           },
         ],
         generationConfig: {
-          temperature: 0.6,
+          temperature: 0.4,
           maxOutputTokens: 2048,
         },
       }),
@@ -108,6 +120,17 @@ export async function callGemini(prompt: string, timeoutMs: number = 15000): Pro
   }
 }
 
+function validateQuestionStructure(q: any): { valid: boolean; reason?: string } {
+  if (!q || typeof q !== "object") return { valid: false, reason: "not an object" };
+  const question = typeof q.question === "string" ? q.question : typeof q.content === "string" ? q.content : null;
+  if (!question) return { valid: false, reason: "missing question/content" };
+  const options = Array.isArray(q.options) ? q.options.map((o: any) => String(o)) : undefined;
+  if (options && options.length === 0) return { valid: false, reason: "empty options" };
+  const correct = q.correctAnswer;
+  if (typeof correct === "undefined" || correct === null) return { valid: false, reason: "missing correctAnswer" };
+  return { valid: true };
+}
+
 export async function generateQuestionsWithChatGPT(
   topic: string,
   count: number = 10,
@@ -120,47 +143,59 @@ export async function generateQuestionsWithChatGPT(
 
   const cacheKey = `cached_questions_${topic}_${difficulty}_${language}`;
 
-  const prompt = `You are an expert quiz generator. Create ${count} questions about "${topic}" with difficulty "${difficulty}" in ${language}.
-Return ONLY a valid JSON object with this exact structure:
+  const prompt = `You are an AI quiz generator. Create ${count} questions about "${topic}" with difficulty "${difficulty}" in ${language}.
+Return ONLY JSON in the format below:
 {
   "questions": [
     {
-      "type": "multiple_choice" | "true_false",
-      "question": string,
-      "options": string[],
-      "correctAnswer": string,
-      "explanation": string,
+      "type": "multiple_choice",
+      "question": "string",
+      "options": ["A", "B", "C", "D"],
+      "correctAnswer": "A",
+      "explanation": "string",
       "difficulty": "Easy" | "Medium" | "Hard" | "Challenge",
       "topic": "${topic}"
     }
   ]
 }
-Do NOT include markdown, backticks, or any commentary. Output JSON only.`;
+Do not include explanations about your answer, markdown, or commentary.
+Return ONLY valid JSON.`;
 
   let attempt = 0;
   while (attempt <= retries) {
     try {
-      console.log(`[AI] attempt ${attempt + 1}/${retries + 1} generating ${count} for ${topic}`);
+      console.log(`[Gemini] topic=${topic} difficulty=${difficulty} | attempt ${attempt + 1}/${retries + 1}`);
       const text = await withTimeout(callGemini(prompt, timeoutMs), timeoutMs);
+      const responseLen = text.length;
       const arr = safeParseQuestions(text);
-      if (!arr) throw new Error("Invalid AI JSON format");
-      const normalized: QuizQuestion[] = arr.map((q: any, i: number) => ({
-        id: `${Date.now()}_${i}`,
-        type: (q?.type as QuizQuestion["type"]) ?? "multiple_choice",
-        question: String(q?.question ?? ""),
-        options: Array.isArray(q?.options) ? q.options.map((o: any) => String(o)) : ["True", "False"],
-        correctAnswer: Array.isArray(q?.correctAnswer)
+      if (!arr) throw new Error("invalid JSON response");
+      const normalized: QuizQuestion[] = arr.map((q: any, i: number) => {
+        const { valid, reason } = validateQuestionStructure(q);
+        if (!valid) {
+          console.error("[Gemini] invalid question structure", { reason, q });
+        }
+        const options = Array.isArray(q?.options) ? q.options.map((o: any) => String(o)) : ["True", "False"];
+        const correct = Array.isArray(q?.correctAnswer)
           ? String((q.correctAnswer as any[])[0])
-          : String(q?.correctAnswer ?? (q?.answer ?? "True")),
-        explanation: String(q?.explanation ?? ""),
-        difficulty: (q?.difficulty as QuizQuestion["difficulty"]) ?? (difficulty as any),
-        topic: String(q?.topic ?? topic),
-      }));
+          : String(q?.correctAnswer ?? (q?.answer ?? options[0]));
+        return {
+          id: `${Date.now()}_${i}`,
+          type: (q?.type as QuizQuestion["type"]) ?? "multiple_choice",
+          question: String(q?.question ?? q?.content ?? ""),
+          options,
+          correctAnswer: correct,
+          explanation: String(q?.explanation ?? ""),
+          difficulty: (q?.difficulty as QuizQuestion["difficulty"]) ?? (difficulty as any),
+          topic: String(q?.topic ?? topic),
+        };
+      });
+      const validCount = normalized.filter((q) => typeof q.question === "string" && q.question.length > 0 && typeof q.correctAnswer !== "undefined").length;
+      console.log(`[Gemini] topic=${topic} difficulty=${difficulty} | ${responseLen} chars | ✅ parsed ${validCount} questions`);
 
       await AsyncStorage.setItem(cacheKey, JSON.stringify(normalized));
       return normalized;
-    } catch (err) {
-      console.error("[AI] generation failed", err);
+    } catch (err: any) {
+      console.error("[Gemini] generation failed", err?.message ?? String(err));
       attempt += 1;
       if (attempt > retries) break;
       const backoff = 2000 * Math.pow(2, attempt - 1);
@@ -170,14 +205,16 @@ Do NOT include markdown, backticks, or any commentary. Output JSON only.`;
 
   const cached = await AsyncStorage.getItem(cacheKey);
   if (cached) {
-    console.warn("Gemini failed, loading cached questions");
     try {
-      return JSON.parse(cached) as QuizQuestion[];
+      const parsed = JSON.parse(cached) as QuizQuestion[];
+      console.warn("[Gemini Fallback] Using cached questions after failures");
+      return parsed;
     } catch (e) {
-      console.error("[AI] cached parse error", e);
+      console.error("[Gemini] cached parse error", e);
     }
   }
 
+  console.warn("[Gemini Fallback] Using mock questions because of: generation failures");
   return getMockQuestions(topic, count);
 }
 
@@ -191,36 +228,60 @@ export type SingleAIQuestion = {
 
 export async function generateSingleQuestion(params: { topic: string; difficulty: string; language?: string; }): Promise<SingleAIQuestion> {
   const { topic, difficulty, language = "English" } = params;
-  const prompt = `You are an expert quiz generator. Generate exactly 1 quiz question about "${topic}" with difficulty "${difficulty}" in ${language}.
-Return ONLY a valid JSON object with this exact structure:
+  const prompt = `You are an AI quiz generator. Generate exactly 1 question about "${topic}" with difficulty "${difficulty}" in ${language}.
+Return ONLY JSON in the format below:
 {
   "questions": [
     {
-      "type": "multipleChoice" | "trueFalse" | "fillBlank" | "mediaBased" | "riddle",
-      "content": string,
-      "options": string[],
-      "correctAnswer": string,
-      "explanation": string
+      "type": "multipleChoice",
+      "content": "string",
+      "options": ["A", "B", "C", "D"],
+      "correctAnswer": "A",
+      "explanation": "string"
     }
   ]
 }
-Do NOT include markdown or explanations. Output JSON only.`;
+Do not include explanations about your answer, markdown, or commentary.
+Return ONLY valid JSON.`;
 
-  const text = await withTimeout(callGemini(prompt, 15000), 15000);
-  const arr = safeParseQuestions(text);
-  if (!arr || arr.length === 0) {
-    console.error("[AI] single question parse failed");
-    throw new Error("AI failed to generate a question");
+  let attempt = 0;
+  const retries = 2;
+  while (attempt <= retries) {
+    try {
+      const text = await withTimeout(callGemini(prompt, 15000), 15000);
+      const arr = safeParseQuestions(text);
+      if (!arr || arr.length === 0) throw new Error("invalid JSON response");
+      const q = arr[0] as any;
+      const { valid, reason } = validateQuestionStructure(q);
+      if (!valid) {
+        console.error("[Gemini] invalid single-question structure", { reason, q });
+        throw new Error("invalid question structure");
+      }
+      const options = Array.isArray(q?.options) ? (q.options as string[]) : ["True", "False"];
+      const out: SingleAIQuestion = {
+        type: (q?.type as SingleAIQuestion["type"]) ?? "multipleChoice",
+        content: String(q?.content ?? q?.question ?? ""),
+        options,
+        correctAnswer: String(q?.correctAnswer ?? options[0]),
+        explanation: String(q?.explanation ?? ""),
+      };
+      console.log(`[Gemini] topic=${topic} difficulty=${difficulty} | single | ✅ parsed`);
+      return out;
+    } catch (err: any) {
+      attempt += 1;
+      console.error("[Gemini] single generation failed", err?.message ?? String(err));
+      if (attempt <= retries) await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt - 1)));
+    }
   }
-  const q = arr[0] as any;
-  const out: SingleAIQuestion = {
-    type: (q?.type as SingleAIQuestion["type"]) ?? "multipleChoice",
-    content: String(q?.content ?? q?.question ?? ""),
-    options: Array.isArray(q?.options) ? (q.options as string[]) : ["True", "False"],
-    correctAnswer: String(q?.correctAnswer ?? (Array.isArray(q?.correctAnswer) ? String(q.correctAnswer[0]) : "True")),
-    explanation: String(q?.explanation ?? ""),
+  console.warn("[Gemini Fallback] Using mock single question due to failures");
+  const mock = getMockQuestions(topic, 1)[0];
+  return {
+    type: "multipleChoice",
+    content: mock.question,
+    options: mock.options,
+    correctAnswer: Array.isArray(mock.correctAnswer) ? String(mock.correctAnswer[0]) : String(mock.correctAnswer),
+    explanation: mock.explanation,
   };
-  return out;
 }
 
 export const generateQuestions = generateQuestionsWithChatGPT;
