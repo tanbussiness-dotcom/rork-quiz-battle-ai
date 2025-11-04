@@ -223,6 +223,8 @@ Do NOT include markdown or explanations. Output JSON only.`;
   return out;
 }
 
+export const generateQuestions = generateQuestionsWithChatGPT;
+
 export async function getAIExplanation(
   question: string,
   userAnswer: string,
