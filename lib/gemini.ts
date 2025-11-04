@@ -1,4 +1,3 @@
-
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export interface QuizQuestion {
@@ -19,7 +18,8 @@ export interface GenerateQuestionsParams {
   language?: string;
 }
 
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent";
+const GEMINI_API_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent";
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -36,49 +36,76 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-async function callGemini(prompt: string, timeoutMs: number): Promise<string> {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("Missing GEMINI_API_KEY");
+export function safeParseQuestions(text: string): any[] | null {
+  try {
+    const obj = JSON.parse(text);
+    if (Array.isArray(obj)) return obj;
+    if (Array.isArray((obj as any).questions)) return (obj as any).questions as any[];
+  } catch {}
+  const match = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  if (match) {
+    try {
+      const obj2 = JSON.parse(match[0]);
+      if (Array.isArray(obj2)) return obj2 as any[];
+      if (Array.isArray((obj2 as any).questions)) return (obj2 as any).questions as any[];
+    } catch {}
+  }
+  return null;
+}
+
+export async function callGemini(prompt: string, timeoutMs: number = 15000): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY ?? process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? "";
+  if (!apiKey) {
+    throw new Error("Missing GEMINI_API_KEY — set GEMINI_API_KEY in your .env");
   }
 
   const controller = new AbortController();
-  const to = setTimeout(() => controller.abort(), timeoutMs + 2000);
+  const timer = setTimeout(() => controller.abort(), Math.min(timeoutMs, 15000));
+  const url = `${GEMINI_API_URL}?key=${apiKey}`;
 
-  const url = `${GEMINI_API_URL}?key=${process.env.GEMINI_API_KEY}`;
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text: prompt,
-            },
-          ],
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.6,
+          maxOutputTokens: 2048,
         },
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-      },
-    }),
-    signal: controller.signal,
-  });
-  clearTimeout(to);
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    console.error("[Gemini Fetch Error]", err);
+    throw new Error(`[Gemini Fetch Error] ${String(err)}`);
+  }
+  clearTimeout(timer);
 
+  const raw = await res.text();
   if (!res.ok) {
-    const errText = await res.text();
-    console.error("[Gemini] Error", res.status, errText);
-    throw new Error(`Gemini ${res.status}`);
+    console.error("[Gemini] non-200:", res.status, raw.slice(0, 500));
+    throw new Error(`Gemini ${res.status}: ${raw.slice(0, 100)}`);
   }
 
-  const data: any = await res.json();
-  const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  return text.replace(/```json|```/g, "").trim();
+  try {
+    const data: any = JSON.parse(raw);
+    const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    return String(text);
+  } catch (e) {
+    console.error("[Gemini Parse Response Error]", String(e), raw.slice(0, 300));
+    throw new Error("Failed to parse Gemini response JSON");
+  }
 }
 
 export async function generateQuestionsWithChatGPT(
@@ -88,36 +115,42 @@ export async function generateQuestionsWithChatGPT(
 ): Promise<QuizQuestion[]> {
   const difficulty = opts?.difficulty ?? "Medium";
   const language = opts?.language ?? "English";
-  const timeoutMs = opts?.timeoutMs ?? 10000;
-  const retries = opts?.retries ?? 2;
+  const timeoutMs = opts?.timeoutMs ?? 15000;
+  const retries = Math.max(0, opts?.retries ?? 2);
 
   const cacheKey = `cached_questions_${topic}_${difficulty}_${language}`;
 
-  const prompt = `You are an expert quiz generator. Generate ${count} multiple-choice and true/false quiz questions about ${topic}.
-Return ONLY a JSON array of objects with these exact keys:
-- type: either "multiple_choice" or "true_false"
-- question: the question text (string)
-- options: array of strings (for multiple_choice use 4 options, for true_false use ["True","False"])
-- correctAnswer: single string with the correct answer
-- explanation: brief explanation (string)
-- difficulty: one of "Easy", "Medium", "Hard", or "Challenge"
-- topic: "${topic}"
-
-Return only valid JSON, no markdown formatting.`;
+  const prompt = `You are an expert quiz generator. Create ${count} questions about "${topic}" with difficulty "${difficulty}" in ${language}.
+Return ONLY a valid JSON object with this exact structure:
+{
+  "questions": [
+    {
+      "type": "multiple_choice" | "true_false",
+      "question": string,
+      "options": string[],
+      "correctAnswer": string,
+      "explanation": string,
+      "difficulty": "Easy" | "Medium" | "Hard" | "Challenge",
+      "topic": "${topic}"
+    }
+  ]
+}
+Do NOT include markdown, backticks, or any commentary. Output JSON only.`;
 
   let attempt = 0;
   while (attempt <= retries) {
     try {
       console.log(`[AI] attempt ${attempt + 1}/${retries + 1} generating ${count} for ${topic}`);
       const text = await withTimeout(callGemini(prompt, timeoutMs), timeoutMs);
-      const parsed = JSON.parse(text) as any[];
-      const normalized: QuizQuestion[] = parsed.map((q: any, i: number) => ({
+      const arr = safeParseQuestions(text);
+      if (!arr) throw new Error("Invalid AI JSON format");
+      const normalized: QuizQuestion[] = arr.map((q: any, i: number) => ({
         id: `${Date.now()}_${i}`,
         type: (q?.type as QuizQuestion["type"]) ?? "multiple_choice",
         question: String(q?.question ?? ""),
-        options: Array.isArray(q?.options) ? q.options.map((o: any) => String(o)) : ["True","False"],
+        options: Array.isArray(q?.options) ? q.options.map((o: any) => String(o)) : ["True", "False"],
         correctAnswer: Array.isArray(q?.correctAnswer)
-          ? String(q.correctAnswer[0])
+          ? String((q.correctAnswer as any[])[0])
           : String(q?.correctAnswer ?? (q?.answer ?? "True")),
         explanation: String(q?.explanation ?? ""),
         difficulty: (q?.difficulty as QuizQuestion["difficulty"]) ?? (difficulty as any),
@@ -127,17 +160,22 @@ Return only valid JSON, no markdown formatting.`;
       await AsyncStorage.setItem(cacheKey, JSON.stringify(normalized));
       return normalized;
     } catch (err) {
-      console.log("[AI] generation failed", err);
+      console.error("[AI] generation failed", err);
       attempt += 1;
       if (attempt > retries) break;
-      await new Promise((r) => setTimeout(r, 500 * attempt));
+      const backoff = 2000 * Math.pow(2, attempt - 1);
+      await new Promise((r) => setTimeout(r, backoff));
     }
   }
 
   const cached = await AsyncStorage.getItem(cacheKey);
   if (cached) {
-    console.warn("⚠️ Gemini failed, loading cached questions");
-    return JSON.parse(cached) as QuizQuestion[];
+    console.warn("Gemini failed, loading cached questions");
+    try {
+      return JSON.parse(cached) as QuizQuestion[];
+    } catch (e) {
+      console.error("[AI] cached parse error", e);
+    }
   }
 
   return getMockQuestions(topic, count);
@@ -154,18 +192,35 @@ export type SingleAIQuestion = {
 export async function generateSingleQuestion(params: { topic: string; difficulty: string; language?: string; }): Promise<SingleAIQuestion> {
   const { topic, difficulty, language = "English" } = params;
   const prompt = `You are an expert quiz generator. Generate exactly 1 quiz question about "${topic}" with difficulty "${difficulty}" in ${language}.
-Return ONLY a valid JSON object with these exact keys:
-- type: one of "multipleChoice", "trueFalse", "fillBlank", "mediaBased", or "riddle"
-- content: the question text (string)
-- options: array of strings (for multipleChoice use 4 options, for trueFalse use ["True","False"])
-- correctAnswer: single string with the correct answer
-- explanation: brief explanation (string)
+Return ONLY a valid JSON object with this exact structure:
+{
+  "questions": [
+    {
+      "type": "multipleChoice" | "trueFalse" | "fillBlank" | "mediaBased" | "riddle",
+      "content": string,
+      "options": string[],
+      "correctAnswer": string,
+      "explanation": string
+    }
+  ]
+}
+Do NOT include markdown or explanations. Output JSON only.`;
 
-Return only valid JSON, no markdown formatting.`;
-  
-  const text = await withTimeout(callGemini(prompt, 8000), 8000);
-  const obj = JSON.parse(text);
-  return obj as SingleAIQuestion;
+  const text = await withTimeout(callGemini(prompt, 15000), 15000);
+  const arr = safeParseQuestions(text);
+  if (!arr || arr.length === 0) {
+    console.error("[AI] single question parse failed");
+    throw new Error("AI failed to generate a question");
+  }
+  const q = arr[0] as any;
+  const out: SingleAIQuestion = {
+    type: (q?.type as SingleAIQuestion["type"]) ?? "multipleChoice",
+    content: String(q?.content ?? q?.question ?? ""),
+    options: Array.isArray(q?.options) ? (q.options as string[]) : ["True", "False"],
+    correctAnswer: String(q?.correctAnswer ?? (Array.isArray(q?.correctAnswer) ? String(q.correctAnswer[0]) : "True")),
+    explanation: String(q?.explanation ?? ""),
+  };
+  return out;
 }
 
 export async function getAIExplanation(
@@ -175,7 +230,7 @@ export async function getAIExplanation(
   language: string = "English"
 ): Promise<string> {
   const prompt = `Explain in ${language} why the correct answer to the following question is "${correctAnswer}" and not "${userAnswer}". Be concise (2-3 sentences). Question: ${question}`;
-  const text = await withTimeout(callGemini(prompt, 8000), 8000);
+  const text = await withTimeout(callGemini(prompt, 15000), 15000);
   return text;
 }
 
