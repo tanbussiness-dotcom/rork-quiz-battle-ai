@@ -7,19 +7,20 @@ import Constants from "expo-constants";
 
 export const trpc = createTRPCReact<AppRouter>();
 
+function ensureTrpcPath(u: string): string {
+  const base = u.replace(/\/$/, "");
+  if (/\/trpc(\b|$)/.test(base)) return base;
+  if (/\/api(\b|$)/.test(base)) return `${base}/trpc`;
+  return `${base}/api/trpc`;
+}
+
 function resolveTrpcUrl(): string {
   const envPreferred = process.env.EXPO_PUBLIC_TRPC_SERVER_URL ?? "";
   const envFallback = process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? "";
   const rawEnv = (envPreferred || envFallback).trim();
 
   if (rawEnv) {
-    const cleaned = rawEnv.replace(/\/$/, "");
-    const isFullTrpc = /\/trpc(\b|$)/.test(cleaned);
-    const url = isFullTrpc
-      ? cleaned
-      : /\/api(\b|$)/.test(cleaned)
-        ? `${cleaned}/trpc`
-        : `${cleaned}/api/trpc`;
+    const url = ensureTrpcPath(rawEnv);
     console.log("✅ [tRPC] Using configured URL:", url);
     return url;
   }
@@ -55,7 +56,7 @@ function getCandidateBases(): string[] {
   const list: string[] = [];
   const push = (u?: string | null) => {
     if (!u) return;
-    const cleaned = u.replace(/\/$/, "");
+    const cleaned = ensureTrpcPath(u);
     if (!list.includes(cleaned)) list.push(cleaned);
   };
 
@@ -77,7 +78,6 @@ function getCandidateBases(): string[] {
   push("http://127.0.0.1:3000/api/trpc");
   push("http://localhost:3000/api/trpc");
 
-  // Ensure the resolved URL is first
   const resolved = resolveTrpcUrl();
   const idx = list.indexOf(resolved);
   if (idx > 0) {
@@ -91,9 +91,10 @@ function getCandidateBases(): string[] {
 }
 
 function buildUrlForBase(base: string, originalUrl: string): string {
+  const normalizedBase = ensureTrpcPath(base);
   const i = originalUrl.indexOf("/trpc");
   const suffix = i >= 0 ? originalUrl.substring(i + "/trpc".length) : "";
-  return `${base}${suffix}`;
+  return `${normalizedBase}${suffix}`;
 }
 
 export const trpcClient = trpc.createClient({
