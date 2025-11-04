@@ -15,4 +15,4 @@ EXPO_PUBLIC_RORK_API_BASE_URL=
 
 # Google Gemini API Configuration
 # Server-side only (backend API routes)
-GEMINI_API_KEY=AIzaSyBVZErpoSRp_nHEoSikkITRIAeGHzQXJbo
+GEMINI_API_KEY=AIzaSyC3k1kr3YZdVmJVcgma0Y05P4TrZ2jCIi0
