@@ -26,12 +26,7 @@ function resolveTrpcUrl(): string {
   }
 
   if (Platform.OS === "web") {
-    if (typeof window !== "undefined" && window.location) {
-      const url = `${window.location.origin}/api/trpc`;
-      console.log("📍 [tRPC] Web resolved URL:", url);
-      return url;
-    }
-    console.warn("⚠️ [tRPC] Web without window.location, using relative '/api/trpc'");
+    console.log("📍 [tRPC] Web resolved URL: /api/trpc (relative)");
     return "/api/trpc";
   }
 
@@ -64,15 +59,14 @@ function getCandidateBases(): string[] {
   push(process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? "");
 
   if (Platform.OS === "web" && typeof window !== "undefined") {
+    // Prefer relative same-origin first to avoid hosts returning HTML
+    push("/api/trpc");
     push(`${window.location.origin}/api/trpc`);
-    
-    // Check if we're on an E2B preview - extract port and try direct connection
+
     const hostname = window.location.hostname;
     if (hostname.includes('e2b.app') || hostname.includes('rorktest.dev')) {
-      // Try the backend port directly (usually 8081 for Expo web)
       const port = '8081';
       const protocol = window.location.protocol;
-      // Build E2B-style URL
       if (hostname.includes('e2b.app')) {
         const parts = hostname.split('-');
         const sessionId = parts[parts.length - 2];
@@ -93,6 +87,7 @@ function getCandidateBases(): string[] {
 
   push("http://127.0.0.1:3000/api/trpc");
   push("http://localhost:3000/api/trpc");
+  push("http://localhost:8081/api/trpc");
 
   const resolved = resolveTrpcUrl();
   const idx = list.indexOf(resolved);
@@ -160,7 +155,7 @@ export const trpcReactClient = trpc.createClient({
         }
 
         console.error("🔗 [tRPC] Tried candidates:", getCandidateBases().join(","));
-        console.error("💡 [tRPC] Tip: set EXPO_PUBLIC_TRPC_SERVER_URL to your backend base or full /api/trpc URL");
+        console.error("💡 [tRPC] Tip: set EXPO_PUBLIC_TRPC_SERVER_URL to your backend base or full /api/trpc URL (prefer same-origin '/api/trpc' on web)");
         throw lastErr ?? new Error("tRPC fetch failed");
       },
     }),
@@ -214,7 +209,7 @@ export const trpcClient = createTRPCClient<AppRouter>({
         }
 
         console.error("🔗 [tRPC Client] Tried all candidates without success");
-        console.error("💡 [tRPC Client] Tip: set EXPO_PUBLIC_TRPC_SERVER_URL to your backend base or full /api/trpc URL");
+        console.error("💡 [tRPC Client] Tip: set EXPO_PUBLIC_TRPC_SERVER_URL to your backend base or full /api/trpc URL (prefer same-origin '/api/trpc' on web)");
         throw lastErr ?? new Error("tRPC fetch failed");
       },
     }),
